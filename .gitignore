@@ -1,0 +1,19 @@
+# Yocto build output and caches
+build/
+layers/
+yocto-venv/
+
+# Temporary files
+.kas_shell_history
+*.log
+*.tmp
+*.swp
+*~
+
+# Generated images and packages
+*.wic
+*.wic.*
+*.rootfs.*
+*.tar.*
+*.ext4
+*.manifest

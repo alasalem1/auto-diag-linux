@@ -1,0 +1,29 @@
+header:
+  version: 14
+
+repos:
+  openembedded-core:
+    url: https://git.openembedded.org/openembedded-core
+    branch: scarthgap
+    path: layers/openembedded-core
+    layers:
+      meta: {}
+
+  bitbake:
+    url: https://git.openembedded.org/bitbake
+    branch: "2.8"
+    path: layers/bitbake
+    layers:
+       .: disabled
+  meta-openembedded:
+    url: https://git.openembedded.org/meta-openembedded
+    branch: scarthgap
+    path: layers/meta-openembedded
+    layers:
+      meta-oe: {}
+      meta-python: {}
+
+  meta-auto-diag:
+    path: meta-auto-diag
+    layers:
+      .: {}
