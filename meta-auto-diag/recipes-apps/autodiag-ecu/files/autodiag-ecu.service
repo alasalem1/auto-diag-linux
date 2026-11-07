@@ -1,0 +1,15 @@
+[Unit]
+Description=AutoDiag UDS ECU Diagnostic Server
+Requires=autodiag-can-setup.service
+After=autodiag-can-setup.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/autodiag-ecu
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

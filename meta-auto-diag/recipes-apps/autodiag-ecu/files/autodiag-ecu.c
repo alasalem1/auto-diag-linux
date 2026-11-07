@@ -2,18 +2,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
 
 #include <sys/socket.h>
+#include <sys/ioctl.h>
+
 #include <linux/can.h>
 #include <linux/can/isotp.h>
+
 #include <net/if.h>
-#include <sys/ioctl.h>
+
+#include "uds_protocol.h"
 
 #define CAN_INTERFACE "vcan0"
 
 #define ECU_TX_ID    0x708
 #define TESTER_RX_ID 0x700
+
+#define UDS_MAX_MESSAGE_SIZE 4095
 
 int main(void)
 {
@@ -21,12 +26,8 @@ int main(void)
     struct sockaddr_can addr;
     struct ifreq ifr;
 
-    unsigned char request[4095];
-    unsigned char response[] = {
-        0x62, 0xF1, 0x90,
-        'A', 'U', 'T', 'O', 'D', 'I', 'A', 'G',
-        '0', '0', '0', '0', '0', '0', '0', '0', '1'
-    };
+    uint8_t request[UDS_MAX_MESSAGE_SIZE];
+    uint8_t response[UDS_MAX_MESSAGE_SIZE];
 
     sock = socket(PF_CAN, SOCK_DGRAM, CAN_ISOTP);
 
@@ -45,6 +46,7 @@ int main(void)
     }
 
     memset(&addr, 0, sizeof(addr));
+
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
     addr.can_addr.tp.tx_id = ECU_TX_ID;
@@ -56,7 +58,7 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-    printf("AutoDiag simulated ECU started\n");
+    printf("AutoDiag UDS ECU Server started\n");
     printf("Interface: %s\n", CAN_INTERFACE);
     printf("ECU TX ID: 0x%03X\n", ECU_TX_ID);
     printf("Tester RX ID: 0x%03X\n", TESTER_RX_ID);
@@ -64,6 +66,7 @@ int main(void)
     fflush(stdout);
 
     while (1) {
+
         ssize_t received = read(sock, request, sizeof(request));
 
         if (received < 0) {
@@ -73,27 +76,35 @@ int main(void)
 
         printf("Received UDS request: ");
 
-        for (ssize_t i = 0; i < received; i++) {
+        for (ssize_t i = 0; i < received; i++)
             printf("%02X ", request[i]);
-        }
 
         printf("\n");
 
-        if (received == 3 &&
-            request[0] == 0x22 &&
-            request[1] == 0xF1 &&
-            request[2] == 0x90) {
+        size_t response_len = 0;
 
-            printf("ReadDataByIdentifier (0x22) - DID F190\n");
-            printf("Sending positive response...\n");
+        if (uds_dispatch_request(
+                request,
+                (size_t)received,
+                response,
+                sizeof(response),
+                &response_len) < 0) {
 
-            if (write(sock, response, sizeof(response)) < 0) {
-                perror("ISO-TP write");
-            } else {
-                printf("Response sent: 62 F1 90 + simulated VIN\n");
-            }
-        } else {
-            printf("Unsupported UDS request\n");
+            fprintf(stderr, "UDS request processing failed\n");
+            fflush(stdout);
+            continue;
+        }
+
+        printf("Sending UDS response: ");
+
+        for (size_t i = 0; i < response_len; i++)
+            printf("%02X ", response[i]);
+
+        printf("\n");
+
+        if (write(sock, response, response_len) !=
+            (ssize_t)response_len) {
+            perror("ISO-TP write");
         }
 
         fflush(stdout);

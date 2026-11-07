@@ -23,6 +23,13 @@ repos:
       meta-oe: {}
       meta-python: {}
 
+  meta-qt6:
+    url: https://code.qt.io/yocto/meta-qt6.git
+    branch: "6.8"
+    path: layers/meta-qt6
+    layers:
+      .: {}
+
   meta-auto-diag:
     path: meta-auto-diag
     layers:

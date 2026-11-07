@@ -17,3 +17,6 @@ yocto-venv/
 *.tar.*
 *.ext4
 *.manifest
+
+# Compiled object files
+*.o

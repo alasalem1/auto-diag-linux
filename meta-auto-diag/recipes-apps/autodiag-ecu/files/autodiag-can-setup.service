@@ -1,0 +1,11 @@
+[Unit]
+Description=AutoDiag CAN Interface Setup
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/autodiag-can-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
