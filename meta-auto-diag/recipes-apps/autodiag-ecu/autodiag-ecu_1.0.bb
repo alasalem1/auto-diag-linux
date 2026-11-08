@@ -9,6 +9,8 @@ SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 
 SRC_URI = " \
     file://autodiag-ecu.c \
+    file://can_communication.c \
+    file://can_communication.h \
     file://uds_protocol.h \
     file://uds_dispatch.c \
     file://service_10.c \
@@ -36,6 +38,7 @@ S = "${WORKDIR}"
 do_compile() {
     ${CC} ${CFLAGS} ${LDFLAGS} \
         ${S}/autodiag-ecu.c \
+        ${S}/can_communication.c \
         ${S}/uds_dispatch.c \
         ${S}/service_10.c \
         ${S}/service_14.c \

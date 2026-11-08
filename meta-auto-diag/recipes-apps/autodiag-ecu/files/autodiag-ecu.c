@@ -15,6 +15,7 @@
 
 #include "uds_protocol.h"
 #include "uds_session.h"
+#include "can_communication.h"
 
 #define CAN_INTERFACE "vcan0"
 
@@ -26,6 +27,7 @@
 int main(void)
 {
     int sock;
+    int can_sock;
     struct sockaddr_can addr;
     struct ifreq ifr;
 
@@ -61,6 +63,15 @@ int main(void)
         return EXIT_FAILURE;
     }
 
+    /* Open the normal application CAN RAW socket. */
+    can_sock = can_communication_open(CAN_INTERFACE);
+
+    if (can_sock < 0) {
+        fprintf(stderr, "Failed to open application CAN socket\n");
+        close(sock);
+        return EXIT_FAILURE;
+    }
+
     printf("AutoDiag UDS ECU Server started\n");
     printf("Interface: %s\n", CAN_INTERFACE);
     printf("ECU TX ID: 0x%03X\n", ECU_TX_ID);
@@ -68,40 +79,87 @@ int main(void)
     printf("Waiting for UDS requests...\n");
     fflush(stdout);
 
-    struct pollfd socket_poll = {
-        .fd = sock,
-        .events = POLLIN
+    struct pollfd socket_poll[2] = {
+        { .fd = sock, .events = POLLIN },
+        { .fd = can_sock, .events = POLLIN }
     };
 
     while (1) {
 
-        int poll_result = poll(&socket_poll, 1, 100);
+        int poll_result = poll(socket_poll, 2, 100);
 
         if (poll_result < 0) {
             if (errno == EINTR)
                 continue;
 
-            perror("ISO-TP poll");
+            perror("ECU poll");
             continue;
         }
 
-        if (poll_result == 0) {
-            if (uds_session_check_timeout()) {
-                printf("S3Server timeout: returned to Default Session; "
-                       "SecurityAccess reset\n");
+        /*
+         * Check S3Server on every iteration, including when
+         * application CAN traffic keeps the poll loop active.
+         */
+        if (uds_session_check_timeout()) {
+            printf("S3Server timeout: returned to Default Session; "
+                   "SecurityAccess reset\n");
+            fflush(stdout);
+        }
+
+        if (poll_result == 0)
+            continue;
+
+        /* Process normal application CAN traffic independently. */
+        if (socket_poll[1].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            fprintf(stderr, "CAN RAW socket poll error: 0x%X\n",
+                    socket_poll[1].revents);
+        }
+
+        if (socket_poll[1].revents & POLLIN) {
+            struct can_frame app_frame;
+
+            int can_result =
+                can_communication_receive(can_sock, &app_frame);
+
+            if (can_result < 0) {
+                perror("Application CAN receive");
+            } else if (can_result > 0) {
+                printf("Received application CAN frame 0x%03X: ",
+                       app_frame.can_id & CAN_SFF_MASK);
+
+                for (uint8_t i = 0; i < app_frame.can_dlc; i++)
+                    printf("%02X ", app_frame.data[i]);
+
+                printf("\n");
+
+                int send_result = can_communication_send(
+                    can_sock,
+                    app_frame.data,
+                    app_frame.can_dlc
+                );
+
+                if (send_result < 0) {
+                    perror("Application CAN transmit");
+                } else if (send_result > 0) {
+                    printf("Sent application CAN response 0x%03X\n",
+                           CAN_COMMUNICATION_TX_ID);
+                } else {
+                    printf("Application CAN transmission disabled "
+                           "by UDS 0x28\n");
+                }
+
                 fflush(stdout);
             }
-
-            continue;
         }
 
-        if (socket_poll.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        /* Process UDS diagnostics independently of application CAN. */
+        if (socket_poll[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
             fprintf(stderr, "ISO-TP socket poll error: 0x%X\n",
-                    socket_poll.revents);
+                    socket_poll[0].revents);
             continue;
         }
 
-        if (!(socket_poll.revents & POLLIN))
+        if (!(socket_poll[0].revents & POLLIN))
             continue;
 
         ssize_t received = read(sock, request, sizeof(request));
@@ -166,6 +224,7 @@ int main(void)
         fflush(stdout);
     }
 
+    can_communication_close(can_sock);
     close(sock);
     return EXIT_SUCCESS;
 }
