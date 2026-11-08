@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "uds_protocol.h"
+#include "uds_session.h"
 
 static int run_test(
     const char *name,
@@ -73,8 +74,13 @@ int main(void)
     const uint8_t valid_vin[] = {0x22, 0xF1, 0x90};
     const uint8_t unsupported_did[] = {0x22, 0xF1, 0x87};
     const uint8_t invalid_length[] = {0x22, 0xF1};
-    const uint8_t unsupported_service[] = {0x10, 0x01};
+    const uint8_t unsupported_service[] = {0x99, 0x01};
     const uint8_t empty_request[] = {0x00};
+    const uint8_t tester_present[] = {0x3E, 0x00};
+    const uint8_t tester_present_suppress[] = {0x3E, 0x80};
+    const uint8_t tester_present_unsupported[] = {0x3E, 0x01};
+    const uint8_t tester_present_invalid[] = {0x3E};
+
 
     const uint8_t expected_vin[] = {
         0x62, 0xF1, 0x90,
@@ -91,12 +97,24 @@ int main(void)
     };
 
     const uint8_t expected_unsupported_service[] = {
-        0x7F, 0x10, 0x11
+        0x7F, 0x99, 0x11
     };
 
     const uint8_t expected_empty_request[] = {
         0x7F, 0x00, 0x13
     };
+
+    const uint8_t expected_tester_present[] = {0x7E, 0x00};
+    const uint8_t expected_tester_present_suppress[] = {0x00};
+    const uint8_t expected_tester_present_unsupported[] = {
+        0x7F, 0x3E, 0x12
+    };
+    const uint8_t expected_tester_present_invalid[] = {
+        0x7F, 0x3E, 0x13
+    };
+
+
+    uds_session_reset();
 
     printf("====================================\n");
     printf("   AutoDiag UDS Dispatcher Tests\n");
@@ -130,6 +148,32 @@ int main(void)
         "Empty request",
         empty_request, 0,
         expected_empty_request, sizeof(expected_empty_request)
+    );
+
+    failures += run_test(
+        "Tester Present normal response",
+        tester_present, sizeof(tester_present),
+        expected_tester_present, sizeof(expected_tester_present)
+    );
+
+    failures += run_test(
+        "Tester Present suppress positive response",
+        tester_present_suppress, sizeof(tester_present_suppress),
+        expected_tester_present_suppress, 0
+    );
+
+    failures += run_test(
+        "Tester Present unsupported subfunction",
+        tester_present_unsupported, sizeof(tester_present_unsupported),
+        expected_tester_present_unsupported,
+        sizeof(expected_tester_present_unsupported)
+    );
+
+    failures += run_test(
+        "Tester Present invalid request length",
+        tester_present_invalid, sizeof(tester_present_invalid),
+        expected_tester_present_invalid,
+        sizeof(expected_tester_present_invalid)
     );
 
     failures += test_insufficient_capacity();

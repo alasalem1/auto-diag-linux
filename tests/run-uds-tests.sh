@@ -15,7 +15,15 @@ gcc \
     -I "$SOURCE_DIR" \
     "$TEST_DIR/test_uds_dispatch.c" \
     "$SOURCE_DIR/uds_dispatch.c" \
+    "$SOURCE_DIR/service_10.c" \
+    "$SOURCE_DIR/service_14.c" \
+    "$SOURCE_DIR/service_19.c" \
+    "$SOURCE_DIR/dtc_manager.c" \
     "$SOURCE_DIR/service_22.c" \
+    "$SOURCE_DIR/service_27.c" \
+    "$SOURCE_DIR/service_3e.c" \
+    "$SOURCE_DIR/uds_security.c" \
+    "$SOURCE_DIR/uds_session.c" \
     -o "$BINARY"
 
 echo "===== EXECUTING UDS UNIT TESTS ====="

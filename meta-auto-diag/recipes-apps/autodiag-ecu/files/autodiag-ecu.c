@@ -95,6 +95,13 @@ int main(void)
             continue;
         }
 
+        /* Suppress the positive response when requested (3E 80). */
+        if (response_len == 0) {
+            printf("Positive response suppressed\n");
+            fflush(stdout);
+            continue;
+        }
+
         printf("Sending UDS response: ");
 
         for (size_t i = 0; i < response_len; i++)

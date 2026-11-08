@@ -9,6 +9,7 @@
 #define UDS_SID_SECURITY_ACCESS            0x27
 #define UDS_SID_READ_DTC_INFORMATION       0x19
 #define UDS_SID_CLEAR_DIAGNOSTIC_INFORMATION 0x14
+#define UDS_SID_TESTER_PRESENT              0x3E
 #define UDS_NEGATIVE_RESPONSE              0x7F
 
 int uds_dispatch_request(
@@ -52,6 +53,14 @@ int uds_service_14(
 );
 
 int uds_service_19(
+    const uint8_t *request,
+    size_t request_len,
+    uint8_t *response,
+    size_t response_capacity,
+    size_t *response_len
+);
+
+int uds_service_3e(
     const uint8_t *request,
     size_t request_len,
     uint8_t *response,

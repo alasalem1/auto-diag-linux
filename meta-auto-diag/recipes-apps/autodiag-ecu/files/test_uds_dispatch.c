@@ -523,6 +523,47 @@ static int test_clear_diagnostic_information(void)
     return failures;
 }
 
+static int test_tester_present(void)
+{
+    int failures = 0;
+
+    const uint8_t normal[] = {0x3E, 0x00};
+    const uint8_t suppress[] = {0x3E, 0x80};
+    const uint8_t unsupported[] = {0x3E, 0x01};
+    const uint8_t invalid_length[] = {0x3E};
+
+    const uint8_t expected_normal[] = {0x7E, 0x00};
+    const uint8_t expected_suppress[] = {0x00};
+    const uint8_t expected_unsupported[] = {0x7F, 0x3E, 0x12};
+    const uint8_t expected_invalid_length[] = {0x7F, 0x3E, 0x13};
+
+    failures += run_test(
+        "Tester Present normal response",
+        normal, sizeof(normal),
+        expected_normal, sizeof(expected_normal)
+    );
+
+    failures += run_test(
+        "Tester Present suppress positive response",
+        suppress, sizeof(suppress),
+        expected_suppress, 0
+    );
+
+    failures += run_test(
+        "Tester Present unsupported subfunction",
+        unsupported, sizeof(unsupported),
+        expected_unsupported, sizeof(expected_unsupported)
+    );
+
+    failures += run_test(
+        "Tester Present invalid request length",
+        invalid_length, sizeof(invalid_length),
+        expected_invalid_length, sizeof(expected_invalid_length)
+    );
+
+    return failures;
+}
+
 int main(void)
 {
     int failures = 0;
@@ -673,6 +714,7 @@ int main(void)
     failures += test_protected_did_access();
     failures += test_read_dtc_information();
     failures += test_clear_diagnostic_information();
+    failures += test_tester_present();
 
     printf("------------------------------------\n");
     printf("Failures: %d\n", failures);
