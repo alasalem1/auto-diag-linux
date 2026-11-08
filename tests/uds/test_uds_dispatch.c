@@ -1,10 +1,14 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <time.h>
 
 #include "uds_protocol.h"
 #include "uds_session.h"
+#include "uds_security.h"
 
 static int run_test(
     const char *name,
@@ -62,6 +66,89 @@ static int test_insufficient_capacity(void)
                  unchanged;
 
     printf("[%s] Insufficient response buffer capacity\n",
+           passed ? "PASS" : "FAIL");
+
+    return passed ? 0 : 1;
+}
+
+
+static void sleep_ms(long milliseconds)
+{
+    struct timespec delay = {
+        .tv_sec = milliseconds / 1000,
+        .tv_nsec = (milliseconds % 1000) * 1000000L
+    };
+
+    while (nanosleep(&delay, &delay) == -1) {
+        /* Continue sleeping if interrupted. */
+    }
+}
+
+static int test_session_timeout(void)
+{
+    int passed = 1;
+
+    /* A zero timeout must be rejected. */
+    if (uds_session_set_s3_timeout_ms(0) != -1)
+        passed = 0;
+
+    /* Use a short timeout for this test. */
+    if (uds_session_set_s3_timeout_ms(100) != 0)
+        passed = 0;
+
+    uds_session_reset();
+    uds_security_reset();
+
+    /* Enter Extended Session and unlock SecurityAccess. */
+    if (uds_session_set(UDS_SESSION_EXTENDED) != 0)
+        passed = 0;
+
+    uint32_t seed = uds_security_generate_seed();
+    uint32_t key = uds_security_calculate_key(seed);
+
+    if (uds_security_validate_key(key) != 0 ||
+        !uds_security_is_unlocked())
+        passed = 0;
+
+    /* The session should expire after inactivity. */
+    sleep_ms(150);
+
+    if (uds_session_check_timeout() != 1)
+        passed = 0;
+
+    if (uds_session_get() != UDS_SESSION_DEFAULT)
+        passed = 0;
+
+    if (uds_security_is_unlocked())
+        passed = 0;
+
+    /* Test that diagnostic activity refreshes the timer. */
+    if (uds_session_set(UDS_SESSION_EXTENDED) != 0)
+        passed = 0;
+
+    sleep_ms(60);
+    uds_session_activity();
+
+    sleep_ms(60);
+
+    if (uds_session_check_timeout() != 0)
+        passed = 0;
+
+    sleep_ms(60);
+
+    if (uds_session_check_timeout() != 1)
+        passed = 0;
+
+    if (uds_session_get() != UDS_SESSION_DEFAULT)
+        passed = 0;
+
+    /* Restore the production timeout for subsequent tests. */
+    uds_session_reset();
+
+    if (uds_session_set_s3_timeout_ms(UDS_S3_SERVER_TIMEOUT_MS) != 0)
+        passed = 0;
+
+    printf("[%s] S3Server timeout, activity refresh and SecurityAccess reset\n",
            passed ? "PASS" : "FAIL");
 
     return passed ? 0 : 1;
@@ -177,6 +264,7 @@ int main(void)
     );
 
     failures += test_insufficient_capacity();
+    failures += test_session_timeout();
 
     printf("------------------------------------\n");
     printf("Failures: %d\n", failures);

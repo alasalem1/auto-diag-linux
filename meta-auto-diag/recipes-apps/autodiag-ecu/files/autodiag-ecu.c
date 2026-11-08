@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <poll.h>
+#include <errno.h>
 
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -12,6 +14,7 @@
 #include <net/if.h>
 
 #include "uds_protocol.h"
+#include "uds_session.h"
 
 #define CAN_INTERFACE "vcan0"
 
@@ -65,14 +68,60 @@ int main(void)
     printf("Waiting for UDS requests...\n");
     fflush(stdout);
 
+    struct pollfd socket_poll = {
+        .fd = sock,
+        .events = POLLIN
+    };
+
     while (1) {
+
+        int poll_result = poll(&socket_poll, 1, 100);
+
+        if (poll_result < 0) {
+            if (errno == EINTR)
+                continue;
+
+            perror("ISO-TP poll");
+            continue;
+        }
+
+        if (poll_result == 0) {
+            if (uds_session_check_timeout()) {
+                printf("S3Server timeout: returned to Default Session; "
+                       "SecurityAccess reset\n");
+                fflush(stdout);
+            }
+
+            continue;
+        }
+
+        if (socket_poll.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            fprintf(stderr, "ISO-TP socket poll error: 0x%X\n",
+                    socket_poll.revents);
+            continue;
+        }
+
+        if (!(socket_poll.revents & POLLIN))
+            continue;
 
         ssize_t received = read(sock, request, sizeof(request));
 
         if (received < 0) {
+            if (errno == EINTR)
+                continue;
+
             perror("ISO-TP read");
             continue;
         }
+
+        /* Expire the old session before this request can refresh it. */
+        if (uds_session_check_timeout()) {
+            printf("S3Server timeout: returned to Default Session; "
+                   "SecurityAccess reset\n");
+        }
+
+        /* Any received diagnostic request refreshes an active session. */
+        uds_session_activity();
 
         printf("Received UDS request: ");
 
