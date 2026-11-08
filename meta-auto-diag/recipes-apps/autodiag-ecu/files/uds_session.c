@@ -4,6 +4,7 @@
 
 #include "uds_session.h"
 #include "uds_security.h"
+#include "uds_protocol.h"
 
 static uint8_t current_session = UDS_SESSION_DEFAULT;
 static uint32_t s3_timeout_ms = UDS_S3_SERVER_TIMEOUT_MS;
@@ -29,6 +30,11 @@ int uds_session_set(uint8_t session_type)
         return -1;
     }
 
+    if (current_session == UDS_SESSION_EXTENDED &&
+        session_type == UDS_SESSION_DEFAULT) {
+        uds_communication_control_reset();
+    }
+
     current_session = session_type;
 
     if (session_type == UDS_SESSION_EXTENDED) {
@@ -44,6 +50,7 @@ void uds_session_reset(void)
 {
     current_session = UDS_SESSION_DEFAULT;
     s3_timer_active = 0;
+    uds_communication_control_reset();
 }
 
 void uds_session_activity(void)
@@ -78,6 +85,7 @@ int uds_session_check_timeout(void)
     current_session = UDS_SESSION_DEFAULT;
     s3_timer_active = 0;
     uds_security_reset();
+    uds_communication_control_reset();
 
     return 1;
 }

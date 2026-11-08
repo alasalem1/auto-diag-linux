@@ -19,6 +19,7 @@ SRC_URI = " \
     file://service_22.c \
     file://service_27.c \
     file://service_3e.c \
+    file://service_28.c \
     file://uds_security.h \
     file://uds_security.c \
     file://uds_session.h \
@@ -43,6 +44,7 @@ do_compile() {
         ${S}/service_22.c \
         ${S}/service_27.c \
         ${S}/service_3e.c \
+        ${S}/service_28.c \
         ${S}/uds_security.c \
         ${S}/uds_session.c \
         -o autodiag-ecu
@@ -57,6 +59,7 @@ do_compile() {
         ${S}/service_22.c \
         ${S}/service_27.c \
         ${S}/service_3e.c \
+        ${S}/service_28.c \
         ${S}/uds_security.c \
         ${S}/uds_session.c \
         -o test-uds-dispatch

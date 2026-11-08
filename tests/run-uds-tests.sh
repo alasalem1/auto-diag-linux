@@ -22,6 +22,7 @@ gcc \
     "$SOURCE_DIR/service_22.c" \
     "$SOURCE_DIR/service_27.c" \
     "$SOURCE_DIR/service_3e.c" \
+    "$SOURCE_DIR/service_28.c" \
     "$SOURCE_DIR/uds_security.c" \
     "$SOURCE_DIR/uds_session.c" \
     -o "$BINARY"

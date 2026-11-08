@@ -606,6 +606,20 @@ static int test_session_timeout(void)
         !uds_security_is_unlocked())
         passed = 0;
 
+    /* Set Communication Control before the session expires. */
+    {
+        const uint8_t request[] = {0x28, 0x03, 0x01};
+        uint8_t response[3];
+        size_t response_len = 0;
+
+        if (uds_dispatch_request(
+                request, sizeof(request),
+                response, sizeof(response),
+                &response_len) != 0 ||
+            uds_communication_control_get() != 0x03)
+            passed = 0;
+    }
+
     /* The session should expire after inactivity. */
     sleep_ms(150);
 
@@ -616,6 +630,9 @@ static int test_session_timeout(void)
         passed = 0;
 
     if (uds_security_is_unlocked())
+        passed = 0;
+
+    if (uds_communication_control_get() != 0x00)
         passed = 0;
 
     /* Test that diagnostic activity refreshes the timer. */
@@ -648,6 +665,160 @@ static int test_session_timeout(void)
            passed ? "PASS" : "FAIL");
 
     return passed ? 0 : 1;
+}
+
+
+static int test_communication_control(void)
+{
+    int failures = 0;
+
+    const uint8_t wrong_session[] = {0x28, 0x00, 0x01};
+    const uint8_t expected_wrong_session[] = {0x7F, 0x28, 0x7E};
+
+    const uint8_t invalid_control[] = {0x28, 0x04, 0x01};
+    const uint8_t expected_invalid_control[] = {0x7F, 0x28, 0x12};
+
+    const uint8_t invalid_communication[] = {0x28, 0x00, 0x00};
+    const uint8_t expected_invalid_communication[] = {
+        0x7F, 0x28, 0x31
+    };
+
+    const uint8_t invalid_length[] = {0x28, 0x00};
+    const uint8_t expected_invalid_length[] = {0x7F, 0x28, 0x13};
+    const uint8_t suppressed_expected[] = {0x00};
+
+    uds_session_reset();
+    uds_communication_control_reset();
+
+    failures += run_test(
+        "Communication Control rejected in Default Session",
+        wrong_session, sizeof(wrong_session),
+        expected_wrong_session, sizeof(expected_wrong_session)
+    );
+
+    if (uds_communication_control_get() != 0x00)
+        failures++;
+
+    if (uds_session_set(UDS_SESSION_EXTENDED) != 0) {
+        printf("[FAIL] Enter Extended Session for Communication Control tests\n");
+        failures++;
+    }
+
+    for (uint8_t control = 0x00; control <= 0x03; control++) {
+        uint8_t request[] = {0x28, control, 0x01};
+        uint8_t expected[] = {0x68, control, 0x01};
+
+        failures += run_test(
+            "Communication Control supported mode",
+            request, sizeof(request),
+            expected, sizeof(expected)
+        );
+
+        if (uds_communication_control_get() != control) {
+            printf("[FAIL] Communication Control state for mode 0x%02X\n",
+                   control);
+            failures++;
+        }
+    }
+
+    const uint8_t suppress_response[] = {0x28, 0x82, 0x01};
+
+    failures += run_test(
+        "Communication Control suppress positive response",
+        suppress_response, sizeof(suppress_response),
+        suppressed_expected, 0
+    );
+
+    if (uds_communication_control_get() != 0x02) {
+        printf("[FAIL] Suppressed request did not update communication state\n");
+        failures++;
+    }
+
+    failures += run_test(
+        "Communication Control unsupported control type",
+        invalid_control, sizeof(invalid_control),
+        expected_invalid_control, sizeof(expected_invalid_control)
+    );
+
+    if (uds_communication_control_get() != 0x02)
+        failures++;
+
+    failures += run_test(
+        "Communication Control unsupported communication type",
+        invalid_communication, sizeof(invalid_communication),
+        expected_invalid_communication,
+        sizeof(expected_invalid_communication)
+    );
+
+    if (uds_communication_control_get() != 0x02)
+        failures++;
+
+    failures += run_test(
+        "Communication Control invalid request length",
+        invalid_length, sizeof(invalid_length),
+        expected_invalid_length, sizeof(expected_invalid_length)
+    );
+
+    if (uds_communication_control_get() != 0x02)
+        failures++;
+
+    {
+        const uint8_t request[] = {0x28, 0x00, 0x01};
+        uint8_t response[2] = {0xAA, 0xAA};
+        size_t response_len = 99;
+
+        int result = uds_dispatch_request(
+            request, sizeof(request),
+            response, sizeof(response),
+            &response_len
+        );
+
+        int passed = result == -1 &&
+                     response_len == 0 &&
+                     uds_communication_control_get() == 0x02;
+
+        printf("[%s] Communication Control insufficient response capacity\n",
+               passed ? "PASS" : "FAIL");
+
+        if (!passed)
+            failures++;
+    }
+
+    /* Leaving Extended Session must restore normal communication. */
+    {
+        const uint8_t default_session[] = {0x10, UDS_SESSION_DEFAULT};
+        const uint8_t expected_default_session[] = {
+            0x50, UDS_SESSION_DEFAULT, 0x00, 0x32, 0x01, 0xF4
+        };
+
+        const uint8_t set_control[] = {0x28, 0x02, 0x01};
+        uint8_t response[3];
+        size_t response_len = 0;
+
+        if (uds_dispatch_request(
+                set_control, sizeof(set_control),
+                response, sizeof(response),
+                &response_len) != 0 ||
+            uds_communication_control_get() != 0x02) {
+            failures++;
+        }
+
+        failures += run_test(
+            "Communication Control reset on Default Session transition",
+            default_session, sizeof(default_session),
+            expected_default_session, sizeof(expected_default_session)
+        );
+
+        if (uds_communication_control_get() != 0x00) {
+            printf("[FAIL] Communication Control was not reset on session transition\n");
+            failures++;
+        }
+    }
+
+    uds_communication_control_reset();
+    uds_session_reset();
+
+    return failures;
 }
 
 int main(void)
@@ -801,6 +972,7 @@ int main(void)
     failures += test_read_dtc_information();
     failures += test_clear_diagnostic_information();
     failures += test_tester_present();
+    failures += test_communication_control();
     failures += test_session_timeout();
 
     printf("------------------------------------\n");

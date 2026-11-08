@@ -68,6 +68,11 @@ int uds_dispatch_request(
                               response, response_capacity,
                               response_len);
 
+    case UDS_SID_COMMUNICATION_CONTROL:
+        return uds_service_28(request, request_len,
+                              response, response_capacity,
+                              response_len);
+
     default:
         return negative_response(request[0], 0x11,
                                  response, response_capacity,
