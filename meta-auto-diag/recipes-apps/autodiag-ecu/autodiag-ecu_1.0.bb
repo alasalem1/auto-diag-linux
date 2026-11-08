@@ -27,6 +27,7 @@ SRC_URI = " \
     file://uds_session.h \
     file://uds_session.c \
     file://test_uds_dispatch.c \
+    file://test_can_communication.c \
     file://run-ptest \
     file://autodiag-can-setup \
     file://autodiag-can-setup.service \
@@ -66,6 +67,14 @@ do_compile() {
         ${S}/uds_security.c \
         ${S}/uds_session.c \
         -o test-uds-dispatch
+
+    ${CC} ${CFLAGS} ${LDFLAGS} \
+        ${S}/test_can_communication.c \
+        ${S}/can_communication.c \
+        ${S}/service_28.c \
+        ${S}/uds_security.c \
+        ${S}/uds_session.c \
+        -o test-can-communication
 }
 
 do_install() {
@@ -89,6 +98,9 @@ do_install_ptest() {
 
     install -m 0755 ${B}/test-uds-dispatch \
         ${D}${PTEST_PATH}/test-uds-dispatch
+
+    install -m 0755 ${B}/test-can-communication \
+        ${D}${PTEST_PATH}/test-can-communication
 
     install -m 0755 ${WORKDIR}/run-ptest \
         ${D}${PTEST_PATH}/run-ptest

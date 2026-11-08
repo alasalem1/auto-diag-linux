@@ -1,5 +1,46 @@
 #!/bin/sh
 
-echo "AutoDiag UDS Dispatcher ptest"
+echo "===================================="
+echo " AutoDiag UDS and CAN ptest"
+echo "===================================="
 
-exec ./test-uds-dispatch
+status=0
+created_interface=0
+
+cleanup()
+{
+    if [ "$created_interface" -eq 1 ]; then
+        /usr/sbin/ip link del vcan-ptest 2>/dev/null || true
+    fi
+}
+
+trap cleanup 0
+
+echo
+echo "===== UDS DISPATCHER TESTS ====="
+./test-uds-dispatch || status=1
+
+echo
+echo "===== CAN COMMUNICATION TESTS ====="
+
+/usr/sbin/modprobe vcan || exit 1
+
+if ! /usr/sbin/ip link show vcan-ptest >/dev/null 2>&1; then
+    /usr/sbin/ip link add dev vcan-ptest type vcan || exit 1
+    created_interface=1
+fi
+
+/usr/sbin/ip link set dev vcan-ptest up || exit 1
+
+./test-can-communication || status=1
+
+echo
+echo "===================================="
+
+if [ "$status" -eq 0 ]; then
+    echo "ALL PTEST SUITES PASSED"
+else
+    echo "ONE OR MORE PTEST SUITES FAILED"
+fi
+
+exit "$status"
