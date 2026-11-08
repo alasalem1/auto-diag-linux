@@ -16,6 +16,7 @@ gcc \
     "$TEST_DIR/test_uds_dispatch.c" \
     "$SOURCE_DIR/uds_dispatch.c" \
     "$SOURCE_DIR/service_10.c" \
+    "$SOURCE_DIR/service_11.c" \
     "$SOURCE_DIR/service_14.c" \
     "$SOURCE_DIR/service_19.c" \
     "$SOURCE_DIR/dtc_manager.c" \

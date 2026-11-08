@@ -1,3 +1,5 @@
+#define _DEFAULT_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +9,7 @@
 
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/reboot.h>
 
 #include <linux/can.h>
 #include <linux/can/isotp.h>
@@ -23,6 +26,42 @@
 #define TESTER_RX_ID 0x700
 
 #define UDS_MAX_MESSAGE_SIZE 4095
+
+
+static void execute_pending_reset(void)
+{
+    uint8_t reset_type = uds_ecu_reset_get_pending();
+
+    if (reset_type == 0)
+        return;
+
+    switch (reset_type) {
+    case 0x01:
+        printf("Executing ECU Hard Reset\n");
+        break;
+    case 0x02:
+        printf("Executing ECU Key Off On Reset\n");
+        break;
+    case 0x03:
+        printf("Executing ECU Soft Reset\n");
+        break;
+    default:
+        fprintf(stderr, "Unknown pending ECU reset type: 0x%02X\n",
+                reset_type);
+        uds_ecu_reset_clear_pending();
+        return;
+    }
+
+    fflush(stdout);
+
+    /* Clear the pending state before attempting the reboot. */
+    uds_ecu_reset_clear_pending();
+
+    sync();
+
+    if (reboot(RB_AUTOBOOT) < 0)
+        perror("ECU reboot");
+}
 
 int main(void)
 {
@@ -202,10 +241,14 @@ int main(void)
             continue;
         }
 
-        /* Suppress the positive response when requested (3E 80). */
+        /* Handle requests that suppress their positive response. */
         if (response_len == 0) {
             printf("Positive response suppressed\n");
             fflush(stdout);
+
+            if (uds_ecu_reset_get_pending() != 0)
+                execute_pending_reset();
+
             continue;
         }
 
@@ -216,9 +259,18 @@ int main(void)
 
         printf("\n");
 
-        if (write(sock, response, response_len) !=
-            (ssize_t)response_len) {
+        ssize_t sent = write(sock, response, response_len);
+
+        if (sent != (ssize_t)response_len) {
             perror("ISO-TP write");
+
+            if (uds_ecu_reset_get_pending() != 0) {
+                uds_ecu_reset_clear_pending();
+                fprintf(stderr,
+                        "ECU reset cancelled: response transmission failed\n");
+            }
+        } else if (uds_ecu_reset_get_pending() != 0) {
+            execute_pending_reset();
         }
 
         fflush(stdout);

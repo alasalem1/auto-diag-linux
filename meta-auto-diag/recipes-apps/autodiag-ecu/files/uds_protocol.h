@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define UDS_SID_ECU_RESET                  0x11
 #define UDS_SID_DIAGNOSTIC_SESSION_CONTROL 0x10
 #define UDS_SID_READ_DATA_BY_IDENTIFIER    0x22
 #define UDS_SID_SECURITY_ACCESS            0x27
@@ -20,6 +21,17 @@ int uds_dispatch_request(
     size_t response_capacity,
     size_t *response_len
 );
+
+int uds_service_11(
+    const uint8_t *request,
+    size_t request_len,
+    uint8_t *response,
+    size_t response_capacity,
+    size_t *response_len
+);
+
+uint8_t uds_ecu_reset_get_pending(void);
+void uds_ecu_reset_clear_pending(void);
 
 int uds_service_10(
     const uint8_t *request,

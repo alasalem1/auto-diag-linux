@@ -38,6 +38,11 @@ int uds_dispatch_request(
 
     switch (request[0]) {
 
+    case UDS_SID_ECU_RESET:
+        return uds_service_11(request, request_len,
+                              response, response_capacity,
+                              response_len);
+
     case UDS_SID_DIAGNOSTIC_SESSION_CONTROL:
         return uds_service_10(request, request_len,
                               response, response_capacity,

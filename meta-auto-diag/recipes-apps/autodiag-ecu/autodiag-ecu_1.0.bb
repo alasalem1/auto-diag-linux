@@ -14,6 +14,7 @@ SRC_URI = " \
     file://uds_protocol.h \
     file://uds_dispatch.c \
     file://service_10.c \
+    file://service_11.c \
     file://service_14.c \
     file://service_19.c \
     file://dtc_manager.h \
@@ -42,6 +43,7 @@ do_compile() {
         ${S}/can_communication.c \
         ${S}/uds_dispatch.c \
         ${S}/service_10.c \
+        ${S}/service_11.c \
         ${S}/service_14.c \
         ${S}/service_19.c \
         ${S}/dtc_manager.c \
@@ -57,6 +59,7 @@ do_compile() {
         ${S}/test_uds_dispatch.c \
         ${S}/uds_dispatch.c \
         ${S}/service_10.c \
+        ${S}/service_11.c \
         ${S}/service_14.c \
         ${S}/service_19.c \
         ${S}/dtc_manager.c \

@@ -331,6 +331,141 @@ static int test_communication_control(void)
     return failures;
 }
 
+
+static int test_ecu_reset(void)
+{
+    int failures = 0;
+
+    const uint8_t hard_reset[] = {0x11, 0x01};
+    const uint8_t key_off_on_reset[] = {0x11, 0x02};
+    const uint8_t soft_reset[] = {0x11, 0x03};
+    const uint8_t unsupported_reset[] = {0x11, 0x04};
+    const uint8_t invalid_length[] = {0x11};
+    const uint8_t suppress_reset[] = {0x11, 0x81};
+
+    const uint8_t expected_hard[] = {0x51, 0x01};
+    const uint8_t expected_key_off_on[] = {0x51, 0x02};
+    const uint8_t expected_soft[] = {0x51, 0x03};
+    const uint8_t expected_unsupported[] = {0x7F, 0x11, 0x12};
+    const uint8_t expected_invalid[] = {0x7F, 0x11, 0x13};
+
+    uds_ecu_reset_clear_pending();
+
+    failures += run_test(
+        "ECU Reset hard reset response",
+        hard_reset, sizeof(hard_reset),
+        expected_hard, sizeof(expected_hard)
+    );
+
+    if (uds_ecu_reset_get_pending() != 0x01) {
+        printf("[FAIL] Hard Reset pending state\n");
+        failures++;
+    } else {
+        printf("[PASS] Hard Reset pending state\n");
+    }
+
+    uds_ecu_reset_clear_pending();
+
+    failures += run_test(
+        "ECU Reset key off on reset response",
+        key_off_on_reset, sizeof(key_off_on_reset),
+        expected_key_off_on, sizeof(expected_key_off_on)
+    );
+
+    if (uds_ecu_reset_get_pending() != 0x02) {
+        printf("[FAIL] Key Off On Reset pending state\n");
+        failures++;
+    } else {
+        printf("[PASS] Key Off On Reset pending state\n");
+    }
+
+    uds_ecu_reset_clear_pending();
+
+    failures += run_test(
+        "ECU Reset soft reset response",
+        soft_reset, sizeof(soft_reset),
+        expected_soft, sizeof(expected_soft)
+    );
+
+    if (uds_ecu_reset_get_pending() != 0x03) {
+        printf("[FAIL] Soft Reset pending state\n");
+        failures++;
+    } else {
+        printf("[PASS] Soft Reset pending state\n");
+    }
+
+    uds_ecu_reset_clear_pending();
+
+    failures += run_test(
+        "ECU Reset unsupported reset type",
+        unsupported_reset, sizeof(unsupported_reset),
+        expected_unsupported, sizeof(expected_unsupported)
+    );
+
+    if (uds_ecu_reset_get_pending() != 0x00) {
+        printf("[FAIL] Unsupported reset must not become pending\n");
+        failures++;
+    } else {
+        printf("[PASS] Unsupported reset does not become pending\n");
+    }
+
+    failures += run_test(
+        "ECU Reset invalid request length",
+        invalid_length, sizeof(invalid_length),
+        expected_invalid, sizeof(expected_invalid)
+    );
+
+    if (uds_ecu_reset_get_pending() != 0x00) {
+        printf("[FAIL] Invalid request must not become pending\n");
+        failures++;
+    } else {
+        printf("[PASS] Invalid request does not become pending\n");
+    }
+
+    failures += run_test(
+        "ECU Reset suppress positive response",
+        suppress_reset, sizeof(suppress_reset),
+        expected_hard, 0
+    );
+
+    if (uds_ecu_reset_get_pending() != 0x01) {
+        printf("[FAIL] Suppressed Hard Reset pending state\n");
+        failures++;
+    } else {
+        printf("[PASS] Suppressed Hard Reset remains pending\n");
+    }
+
+    uds_ecu_reset_clear_pending();
+
+    /* Insufficient capacity must not schedule a reset. */
+    {
+        const uint8_t request[] = {0x11, 0x01};
+        uint8_t response[1] = {0xAA};
+        size_t response_len = 99;
+
+        int result = uds_dispatch_request(
+            request, sizeof(request),
+            response, sizeof(response),
+            &response_len
+        );
+
+        int passed = result == -1 &&
+                     response_len == 0 &&
+                     response[0] == 0xAA &&
+                     uds_ecu_reset_get_pending() == 0x00;
+
+        printf("[%s] ECU Reset insufficient response capacity\n",
+               passed ? "PASS" : "FAIL");
+
+        if (!passed)
+            failures++;
+    }
+
+    uds_ecu_reset_clear_pending();
+
+    return failures;
+}
+
 int main(void)
 {
     int failures = 0;
@@ -442,6 +577,7 @@ int main(void)
 
     failures += test_insufficient_capacity();
     failures += test_communication_control();
+    failures += test_ecu_reset();
     failures += test_session_timeout();
 
     printf("------------------------------------\n");
