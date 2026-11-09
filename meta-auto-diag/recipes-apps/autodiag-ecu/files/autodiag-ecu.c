@@ -192,10 +192,29 @@ int main(void)
         }
 
         /* Process UDS diagnostics independently of application CAN. */
-        if (socket_poll[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            fprintf(stderr, "ISO-TP socket poll error: 0x%X\n",
+        if (socket_poll[0].revents & (POLLHUP | POLLNVAL)) {
+            fprintf(stderr, "ISO-TP socket unavailable: 0x%X\n",
                     socket_poll[0].revents);
             continue;
+        }
+
+        /*
+         * POLLERR may occur together with POLLIN.
+         * Inspect the pending error without discarding readable data.
+         */
+        if (socket_poll[0].revents & POLLERR) {
+            int socket_error = 0;
+            socklen_t error_length = sizeof(socket_error);
+
+            if (getsockopt(sock, SOL_SOCKET, SO_ERROR,
+                           &socket_error, &error_length) < 0) {
+                perror("ISO-TP SO_ERROR");
+            } else if (socket_error != 0) {
+                fprintf(stderr, "ISO-TP pending error: %s (%d)\n",
+                        strerror(socket_error), socket_error);
+            } else {
+                fprintf(stderr, "ISO-TP reported POLLERR\n");
+            }
         }
 
         if (!(socket_poll[0].revents & POLLIN))
