@@ -150,19 +150,37 @@ The build produces a bootable QEMU image and associated deployment artifacts.
 ## Repository structure
 
     auto-diag-linux/
-    ├── docker/                 # Docker build and shell helpers
-    ├── docs/                   # Project and integration documentation
-    ├── kas/                    # KAS build configurations
-    ├── meta-auto-diag/         # Custom Yocto layer
-    │   └── recipes-apps/
-    │       ├── autodiag-ecu/   # UDS ECU server
-    │       ├── autodiag-gui/   # Diagnostic GUI application
-    │       └── autodiag-isotp/ # ISO-TP diagnostic test tools
-    ├── scripts/                # Development scripts
-    ├── tests/                  # Automated tests
-    │   └── uds/                # UDS and DID persistence tests
+    ├── .github/
+    │   └── workflows/
+    │       └── uds-tests.yml
+    ├── docker/
+    │   └── docker.sh
+    ├── docs/
+    │   └── UDS_ISOTP_INTEGRATION_TEST.md
+    ├── kas/
+    │   ├── auto-diag-linux.yml
+    │   └── include/
+    │       ├── local.yml
+    │       └── oe.yml
+    ├── meta-auto-diag/
+    │   ├── conf/
+    │   │   ├── distro/autodiag.conf
+    │   │   └── layer.conf
+    │   ├── recipes-apps/
+    │   │   ├── autodiag-ecu/
+    │   │   ├── autodiag-gui/
+    │   │   └── autodiag-isotp/
+    │   └── recipes-kernel/
+    │       └── linux/linux-yocto_%.bbappend
+    ├── tests/
+    │   ├── qemu/
+    │   │   └── run-qemu-integration.py
+    │   ├── uds/
+    │   │   ├── test_did_manager_persistence.c
+    │   │   └── test_uds_dispatch.c
+    │   └── run-uds-tests.sh
+    ├── .gitignore
     └── README.md
-
 
 ## Project status
 
