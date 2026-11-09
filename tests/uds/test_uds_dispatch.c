@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "uds_protocol.h"
 #include "uds_session.h"
@@ -572,6 +575,150 @@ static int test_control_dtc_setting(void)
 }
 
 
+
+static int test_persistent_write_failure(
+    const uint8_t *request,
+    size_t request_len)
+{
+    int failures = 0;
+    int directory_moved = 0;
+    int blocker_created = 0;
+    int initialized = 0;
+
+    char directory[] = "/tmp/autodiag-uds-write-failure-XXXXXX";
+    char backup_directory[256];
+    char storage_path[512];
+
+    const uint8_t expected_original[DID_WRITABLE_DATA_LENGTH] =
+        "AUTODIAG-CAL-001";
+
+    const uint8_t expected_nrc[] = {0x7F, 0x2E, 0x72};
+
+    uint8_t response[64] = {0};
+    uint8_t readback[DID_WRITABLE_DATA_LENGTH];
+    size_t response_len = 0;
+    size_t readback_len = 0;
+
+    printf("\n===== UDS PERSISTENCE FAILURE TEST =====\n");
+
+    if (!mkdtemp(directory)) {
+        perror("Creating temporary test directory");
+        return 1;
+    }
+
+    if (snprintf(backup_directory, sizeof(backup_directory),
+                 "%s.backup", directory) >=
+        (int)sizeof(backup_directory) ||
+        snprintf(storage_path, sizeof(storage_path),
+                 "%s/calibration-f1a1.bin", directory) >=
+        (int)sizeof(storage_path)) {
+        printf("[FAIL] Test storage path is too long\n");
+        failures++;
+        goto cleanup;
+    }
+
+    if (did_manager_init(storage_path) != 0) {
+        perror("Initializing persistent DID manager");
+        failures++;
+        goto cleanup;
+    }
+
+    initialized = 1;
+
+    if (rename(directory, backup_directory) != 0) {
+        perror("Temporarily moving storage directory");
+        failures++;
+        goto cleanup;
+    }
+
+    directory_moved = 1;
+
+    int fd = open(directory, O_CREAT | O_EXCL | O_WRONLY, 0600);
+
+    if (fd < 0) {
+        perror("Creating storage-path blocker");
+        failures++;
+        goto cleanup;
+    }
+
+    close(fd);
+    blocker_created = 1;
+
+    int result = uds_dispatch_request(
+        request, request_len,
+        response, sizeof(response),
+        &response_len
+    );
+
+    if (result == 0 &&
+        response_len == sizeof(expected_nrc) &&
+        memcmp(response, expected_nrc, sizeof(expected_nrc)) == 0) {
+        printf("[PASS] UDS returns NRC 0x72 on storage failure\n");
+    } else {
+        printf("[FAIL] UDS did not return the expected NRC 0x72\n");
+        failures++;
+    }
+
+    if (did_manager_read(
+            DID_WRITABLE_CALIBRATION,
+            readback,
+            sizeof(readback),
+            &readback_len) == 0 &&
+        readback_len == DID_WRITABLE_DATA_LENGTH &&
+        memcmp(readback, expected_original, sizeof(readback)) == 0) {
+        printf("[PASS] Failed UDS write preserves in-memory calibration\n");
+    } else {
+        printf("[FAIL] Failed UDS write changed in-memory calibration\n");
+        failures++;
+    }
+
+cleanup:
+    if (blocker_created && unlink(directory) != 0) {
+        perror("Removing storage-path blocker");
+        failures++;
+    }
+
+    if (directory_moved) {
+        if (rename(backup_directory, directory) != 0) {
+            perror("Restoring storage directory");
+            failures++;
+            directory_moved = 0;
+        } else {
+            directory_moved = 0;
+
+            if (did_manager_init(storage_path) != 0) {
+                perror("Reloading restored persistent calibration");
+                failures++;
+            } else if (did_manager_read(
+                           DID_WRITABLE_CALIBRATION,
+                           readback,
+                           sizeof(readback),
+                           &readback_len) == 0 &&
+                       readback_len == DID_WRITABLE_DATA_LENGTH &&
+                       memcmp(readback, expected_original,
+                              sizeof(readback)) == 0) {
+                printf("[PASS] Original calibration survives storage recovery\n");
+            } else {
+                printf("[FAIL] Original calibration changed on disk\n");
+                failures++;
+            }
+        }
+    }
+
+    if (initialized)
+        unlink(storage_path);
+
+    if (!directory_moved)
+        rmdir(directory);
+
+    if (directory_moved)
+        rmdir(backup_directory);
+
+    did_manager_reset();
+
+    return failures;
+}
+
 static int test_write_data_by_identifier(void)
 {
     int failures = 0;
@@ -644,6 +791,10 @@ static int test_write_data_by_identifier(void)
         printf("[FAIL] Unlock SecurityAccess for WriteDataByIdentifier\n");
         return failures + 1;
     }
+
+    failures += test_persistent_write_failure(
+        write_request, sizeof(write_request)
+    );
 
     failures += run_test(
         "Write writable calibration DID",
