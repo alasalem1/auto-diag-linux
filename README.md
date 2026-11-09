@@ -190,3 +190,61 @@ The build produces a bootable QEMU image and associated deployment artifacts.
 ## Limitations
 
 AutoDiag Linux is a development and validation platform. The ECU simulator uses simulated diagnostic data and has been validated in QEMU. Physical vehicle testing, production qualification, and automotive certification are outside the current project scope.
+
+## Yocto layer architecture
+
+The project uses a layered Yocto architecture managed by KAS.
+
+| Layer | Responsibility |
+|---|---|
+| OpenEmbedded Core (`meta`) | Core metadata and `qemux86-64` machine configuration |
+| `meta-openembedded` | Additional recipes from `meta-oe` and `meta-python` |
+| `meta-qt6` | Qt 6 integration |
+| `meta-auto-diag` | Custom AutoDiag distribution and automotive application recipes |
+
+The custom `meta-auto-diag` layer contains:
+
+- `conf/distro/autodiag.conf`: Custom Linux distribution configuration.
+- `recipes-apps/`: Automotive diagnostic applications and related recipes.
+
+The project currently uses the upstream `qemux86-64` machine configuration rather than maintaining a separate custom BSP layer.
+
+## Automated QEMU integration test
+
+The project includes an automated QEMU integration test:
+
+`tests/qemu/run-qemu-integration.py`
+
+The test runner uses Python and `pexpect` to:
+
+1. Launch the Yocto-built QEMU image.
+2. Wait for the guest Linux system to boot.
+3. Log in automatically as root.
+4. Execute the UDS diagnostic tester.
+5. Verify the VIN response for DID `0xF190`.
+6. Confirm that the test reports `TEST PASS`.
+7. Terminate QEMU and clean up the temporary disk.
+
+Run from the KAS build environment:
+
+    python3 /work/tests/qemu/run-qemu-integration.py
+
+The test validates the UDS ReadDataByIdentifier (`0x22`) transaction and the simulated VIN:
+
+`AUTODIAG000000001`
+
+## Continuous integration
+
+GitHub Actions is configured in:
+
+`.github/workflows/uds-tests.yml`
+
+The workflow runs on:
+
+- Pushes to `main`.
+- Pull requests targeting `main`.
+- Manual workflow dispatch.
+
+It compiles and executes the UDS dispatcher and calibration persistence tests, then checks patch formatting.
+
+The GitHub Actions workflow does not perform a complete Yocto image build or QEMU integration test. The QEMU integration test is currently executed locally.
