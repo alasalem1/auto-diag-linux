@@ -69,6 +69,10 @@ def main():
             if "TEST PASS" not in uds_output:
                 raise RuntimeError("UDS integration test did not report TEST PASS")
             print("UDS integration test passed.")
+            session_output = run_guest_command(child, "/usr/bin/autodiag-session-test", "SESSION_TEST", timeout=60)
+            if "ALL SESSION, SECURITY ACCESS AND PROTECTED DID WRITE/READBACK TESTS PASSED" not in session_output:
+                raise RuntimeError("Session/security/protected DID integration test did not report success")
+            print("Session, security access, and protected DID write/readback integration test passed.")
         finally:
             child.terminate(force=True)
 

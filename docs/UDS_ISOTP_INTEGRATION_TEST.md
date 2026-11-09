@@ -190,9 +190,15 @@ The Python runner uses `pexpect` to:
 2. Create an independent temporary root filesystem copy.
 3. Start the Yocto-built QEMU image.
 4. Wait for the Linux login prompt and log in as root.
-5. Execute `/usr/bin/autodiag-isotp-test`.
-6. Verify that the output contains `TEST PASS`.
-7. Stop QEMU and clean up the temporary disk.
+5. Execute `/usr/bin/autodiag-isotp-test` and verify the VIN response for DID `0xF190`.
+6. Execute `/usr/bin/autodiag-session-test` and verify diagnostic session transitions and access restrictions.
+7. Verify SecurityAccess seed handling, incorrect-key rejection, and successful unlock.
+8. Write `NEW-CAL-DATA-002` to protected DID `0xF1A1` using WriteDataByIdentifier (`0x2E`).
+9. Read DID `0xF1A1` using ReadDataByIdentifier (`0x22`) and verify the exact 16-byte value.
+10. Verify protected DID access is denied after returning to the Default Session.
+11. Stop QEMU and clean up the temporary disk.
+
+The automated write/readback test is distinct from the reboot-persistence test documented earlier in this file. The QEMU runner verifies the write and readback in the same guest session; it does not currently automate a guest reboot to verify persistence.
 
 ### Automated test environment
 
@@ -202,20 +208,20 @@ The Python runner uses `pexpect` to:
 | Emulator | Yocto-native QEMU |
 | Test runner | Python 3 + pexpect |
 | Diagnostic interface | vcan0 |
-| Diagnostic service | ReadDataByIdentifier (0x22) |
-| DID | 0xF190 (VIN) |
+| Diagnostic services | DiagnosticSessionControl (0x10), ReadDataByIdentifier (0x22), SecurityAccess (0x27), WriteDataByIdentifier (0x2E) |
+| DIDs | 0xF190 (VIN), 0xF1A0 (protected calibration), 0xF1A1 (writable calibration) |
 
 ### Verified result
 
-The automated test successfully booted the guest, logged in as root, and completed a UDS diagnostic exchange.
+The automated test successfully booted the guest, logged in as root, and completed both ISO-TP test programs.
 
-Expected VIN:
+- VIN DID `0xF190` returned `AUTODIAG000000001`.
+- Session-control and SecurityAccess checks passed, including rejection of an incorrect key.
+- Protected DID `0xF1A0` was readable only after entering the Extended Session and unlocking SecurityAccess.
+- DID `0xF1A1` accepted the 16-byte value `NEW-CAL-DATA-002`; the subsequent read returned the exact same value.
+- Protected access was denied again after returning to the Default Session.
 
-`AUTODIAG000000001`
-
-The ECU returned a positive response (`0x62`) for DID `0xF190`.
-
-**Result: PASS** — the automated QEMU integration test verified the VIN response and reported `UDS integration test passed.`
+**Result: PASS** — both `/usr/bin/autodiag-isotp-test` and `/usr/bin/autodiag-session-test` completed successfully in QEMU. The session tester reported `ALL SESSION, SECURITY ACCESS AND PROTECTED DID WRITE/READBACK TESTS PASSED`.
 
 Run from the KAS build environment:
 

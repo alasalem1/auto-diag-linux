@@ -235,13 +235,14 @@ The project includes an automated QEMU integration test:
 
 The test runner uses Python and `pexpect` to:
 
-1. Launch the Yocto-built QEMU image.
-2. Wait for the guest Linux system to boot.
-3. Log in automatically as root.
-4. Execute the UDS diagnostic tester.
-5. Verify the VIN response for DID `0xF190`.
-6. Confirm that the test reports `TEST PASS`.
-7. Terminate QEMU and clean up the temporary disk.
+1. Launch the Yocto-built QEMU image using an independent temporary root filesystem copy.
+2. Wait for the guest Linux system to boot and log in automatically as root.
+3. Execute `/usr/bin/autodiag-isotp-test` and verify the VIN response for DID `0xF190`.
+4. Execute `/usr/bin/autodiag-session-test` and verify diagnostic session transitions and access restrictions.
+5. Verify SecurityAccess seed handling, incorrect-key rejection, and successful unlock.
+6. Write the 16-byte calibration value `NEW-CAL-DATA-002` to protected DID `0xF1A1` and read it back for exact comparison.
+7. Verify protected access is denied again after returning to the Default Session.
+8. Terminate QEMU and clean up the temporary disk.
 
 Run from the KAS build environment:
 

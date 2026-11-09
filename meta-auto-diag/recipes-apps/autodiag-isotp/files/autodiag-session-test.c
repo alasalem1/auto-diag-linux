@@ -97,6 +97,22 @@ int main(void)
     };
     const unsigned char security_unlock_expected[] = {0x67, 0x02};
 
+    const unsigned char writable_did_write_request[] = {
+        0x2E, 0xF1, 0xA1,
+        'N', 'E', 'W', '-', 'C', 'A', 'L', '-',
+        'D', 'A', 'T', 'A', '-', '0', '0', '2'
+    };
+    const unsigned char writable_did_write_expected[] = {
+        0x6E, 0xF1, 0xA1
+    };
+    const unsigned char writable_did_read_request[] = {
+        0x22, 0xF1, 0xA1
+    };
+    const unsigned char writable_did_read_expected[] = {
+        0x62, 0xF1, 0xA1,
+        'N', 'E', 'W', '-', 'C', 'A', 'L', '-',
+        'D', 'A', 'T', 'A', '-', '0', '0', '2'
+    };
 
     int sock;
     struct sockaddr_can addr;
@@ -306,6 +322,18 @@ int main(void)
         failures++;
 
     if (send_uds_request(
+            sock, writable_did_write_request, sizeof(writable_did_write_request),
+            writable_did_write_expected, sizeof(writable_did_write_expected),
+            "Write Calibration DID F1A1") != 0)
+        failures++;
+
+    if (send_uds_request(
+            sock, writable_did_read_request, sizeof(writable_did_read_request),
+            writable_did_read_expected, sizeof(writable_did_read_expected),
+            "Read Back and Verify Calibration DID F1A1") != 0)
+        failures++;
+
+    if (send_uds_request(
             sock, default_request, sizeof(default_request),
             default_expected, sizeof(default_expected),
             "Return to Default Session After Protected Access") != 0)
@@ -322,7 +350,7 @@ int main(void)
     printf("\n====================================\n");
 
     if (failures == 0) {
-        printf(" ALL SESSION, SECURITY ACCESS AND PROTECTED DID TESTS PASSED\n");
+        printf(" ALL SESSION, SECURITY ACCESS AND PROTECTED DID WRITE/READBACK TESTS PASSED\n");
         printf("====================================\n");
         return EXIT_SUCCESS;
     }
