@@ -12,6 +12,7 @@
 #define UDS_SID_CLEAR_DIAGNOSTIC_INFORMATION 0x14
 #define UDS_SID_TESTER_PRESENT              0x3E
 #define UDS_SID_COMMUNICATION_CONTROL      0x28
+#define UDS_SID_CONTROL_DTC_SETTING        0x85
 #define UDS_NEGATIVE_RESPONSE              0x7F
 
 int uds_dispatch_request(
@@ -82,6 +83,15 @@ int uds_service_3e(
 );
 
 int uds_service_28(
+    const uint8_t *request,
+    size_t request_len,
+    uint8_t *response,
+    size_t response_capacity,
+    size_t *response_len
+);
+
+
+int uds_service_85(
     const uint8_t *request,
     size_t request_len,
     uint8_t *response,

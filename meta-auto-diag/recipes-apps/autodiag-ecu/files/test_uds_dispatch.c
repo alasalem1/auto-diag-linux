@@ -9,6 +9,7 @@
 #include "uds_protocol.h"
 #include "uds_session.h"
 #include "uds_security.h"
+#include "dtc_manager.h"
 
 static int run_test(
     const char *name,
@@ -323,6 +324,140 @@ static int test_security_access_sequence(void)
     return failures;
 }
 
+
+
+static int test_control_dtc_setting(void)
+{
+    int failures = 0;
+
+    const uint8_t disable[] = {0x85, 0x02};
+    const uint8_t enable[] = {0x85, 0x01};
+    const uint8_t invalid_subfunction[] = {0x85, 0x03};
+    const uint8_t invalid_length[] = {0x85};
+    const uint8_t suppressed_disable[] = {0x85, 0x82};
+    const uint8_t suppressed_enable[] = {0x85, 0x81};
+    const uint8_t read_all[] = {0x19, 0x02, 0xFF};
+
+    const uint8_t expected_disable[] = {0xC5, 0x02};
+    const uint8_t expected_enable[] = {0xC5, 0x01};
+    const uint8_t expected_invalid_subfunction[] = {
+        0x7F, 0x85, 0x12
+    };
+    const uint8_t expected_invalid_length[] = {
+        0x7F, 0x85, 0x13
+    };
+    const uint8_t expected_all_dtcs[] = {
+        0x59, 0x02, 0xFF,
+        0x12, 0x34, 0x56, 0x09,
+        0x23, 0x45, 0x67, 0x0B,
+        0x34, 0x56, 0x78, 0x01
+    };
+
+    printf("\n===== CONTROL DTC SETTING TESTS =====\n");
+
+    int initially_enabled = dtc_manager_is_setting_enabled();
+    printf("[%s] DTC setting enabled by default\n",
+           initially_enabled ? "PASS" : "FAIL");
+    failures += initially_enabled ? 0 : 1;
+
+    failures += run_test(
+        "Disable DTC setting",
+        disable, sizeof(disable),
+        expected_disable, sizeof(expected_disable)
+    );
+
+    int disabled = !dtc_manager_is_setting_enabled();
+    printf("[%s] DTC manager state becomes disabled\n",
+           disabled ? "PASS" : "FAIL");
+    failures += disabled ? 0 : 1;
+
+    failures += run_test(
+        "Existing DTCs remain readable while setting is disabled",
+        read_all, sizeof(read_all),
+        expected_all_dtcs, sizeof(expected_all_dtcs)
+    );
+
+    failures += run_test(
+        "Enable DTC setting",
+        enable, sizeof(enable),
+        expected_enable, sizeof(expected_enable)
+    );
+
+    int enabled = dtc_manager_is_setting_enabled();
+    printf("[%s] DTC manager state becomes enabled\n",
+           enabled ? "PASS" : "FAIL");
+    failures += enabled ? 0 : 1;
+
+    failures += run_test(
+        "Unsupported ControlDTCSetting subfunction",
+        invalid_subfunction, sizeof(invalid_subfunction),
+        expected_invalid_subfunction,
+        sizeof(expected_invalid_subfunction)
+    );
+
+    failures += run_test(
+        "Invalid ControlDTCSetting request length",
+        invalid_length, sizeof(invalid_length),
+        expected_invalid_length, sizeof(expected_invalid_length)
+    );
+
+    int state_unchanged = dtc_manager_is_setting_enabled();
+    printf("[%s] Invalid requests do not change DTC setting state\n",
+           state_unchanged ? "PASS" : "FAIL");
+    failures += state_unchanged ? 0 : 1;
+
+    uint8_t response[2] = {0xAA, 0xAA};
+    size_t response_len = 99;
+
+    int result = uds_dispatch_request(
+        disable, sizeof(disable),
+        response, 1,
+        &response_len
+    );
+
+    int capacity_passed =
+        result == -1 &&
+        response_len == 0 &&
+        response[0] == 0xAA &&
+        response[1] == 0xAA &&
+        dtc_manager_is_setting_enabled();
+
+    printf("[%s] Insufficient response capacity preserves state\n",
+           capacity_passed ? "PASS" : "FAIL");
+    failures += capacity_passed ? 0 : 1;
+
+    result = uds_dispatch_request(
+        suppressed_disable, sizeof(suppressed_disable),
+        response, sizeof(response),
+        &response_len
+    );
+
+    int suppress_disable_passed =
+        result == 0 &&
+        response_len == 0 &&
+        !dtc_manager_is_setting_enabled();
+
+    printf("[%s] Suppress positive response while disabling\n",
+           suppress_disable_passed ? "PASS" : "FAIL");
+    failures += suppress_disable_passed ? 0 : 1;
+
+    result = uds_dispatch_request(
+        suppressed_enable, sizeof(suppressed_enable),
+        response, sizeof(response),
+        &response_len
+    );
+
+    int suppress_enable_passed =
+        result == 0 &&
+        response_len == 0 &&
+        dtc_manager_is_setting_enabled();
+
+    printf("[%s] Suppress positive response while enabling\n",
+           suppress_enable_passed ? "PASS" : "FAIL");
+    failures += suppress_enable_passed ? 0 : 1;
+
+    return failures;
+}
 
 static int test_read_dtc_information(void)
 {
@@ -1104,6 +1239,7 @@ int main(void)
 
     failures += test_security_access_sequence();
     failures += test_protected_did_access();
+    failures += test_control_dtc_setting();
     failures += test_read_dtc_information();
     failures += test_clear_diagnostic_information();
     failures += test_tester_present();

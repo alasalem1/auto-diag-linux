@@ -13,6 +13,9 @@ struct dtc_record {
 
 uint8_t dtc_manager_get_status_availability_mask(void);
 
+void dtc_manager_set_setting_enabled(int enabled);
+int dtc_manager_is_setting_enabled(void);
+
 void dtc_manager_clear_all(void);
 
 size_t dtc_manager_get_by_status_mask(

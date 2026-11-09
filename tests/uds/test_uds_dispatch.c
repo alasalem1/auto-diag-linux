@@ -9,6 +9,7 @@
 #include "uds_protocol.h"
 #include "uds_session.h"
 #include "uds_security.h"
+#include "dtc_manager.h"
 
 static int run_test(
     const char *name,
@@ -466,6 +467,109 @@ static int test_ecu_reset(void)
     return failures;
 }
 
+
+static int test_control_dtc_setting(void)
+{
+    int failures = 0;
+
+    const uint8_t disable[] = {0x85, 0x02};
+    const uint8_t enable[] = {0x85, 0x01};
+    const uint8_t invalid_subfunction[] = {0x85, 0x03};
+    const uint8_t invalid_length[] = {0x85};
+    const uint8_t suppressed_disable[] = {0x85, 0x82};
+    const uint8_t suppressed_enable[] = {0x85, 0x81};
+
+    const uint8_t expected_disable[] = {0xC5, 0x02};
+    const uint8_t expected_enable[] = {0xC5, 0x01};
+    const uint8_t expected_unsupported[] = {0x7F, 0x85, 0x12};
+    const uint8_t expected_length[] = {0x7F, 0x85, 0x13};
+
+    printf("\n===== CONTROL DTC SETTING TESTS =====\n");
+
+    int passed = dtc_manager_is_setting_enabled();
+    printf("[%s] DTC setting enabled by default\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    failures += run_test("Disable DTC setting",
+                         disable, sizeof(disable),
+                         expected_disable, sizeof(expected_disable));
+
+    passed = !dtc_manager_is_setting_enabled();
+    printf("[%s] DTC setting state becomes disabled\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    struct dtc_record records[DTC_MANAGER_MAX_RECORDS];
+    size_t count = dtc_manager_get_by_status_mask(
+        0xFF, records, DTC_MANAGER_MAX_RECORDS);
+
+    passed = count == 3;
+    printf("[%s] Existing DTC records remain while setting is disabled\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    failures += run_test("Enable DTC setting",
+                         enable, sizeof(enable),
+                         expected_enable, sizeof(expected_enable));
+
+    passed = dtc_manager_is_setting_enabled();
+    printf("[%s] DTC setting state becomes enabled\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    failures += run_test("Unsupported ControlDTCSetting subfunction",
+                         invalid_subfunction, sizeof(invalid_subfunction),
+                         expected_unsupported, sizeof(expected_unsupported));
+
+    failures += run_test("Invalid ControlDTCSetting request length",
+                         invalid_length, sizeof(invalid_length),
+                         expected_length, sizeof(expected_length));
+
+    passed = dtc_manager_is_setting_enabled();
+    printf("[%s] Invalid requests preserve the enabled state\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    uint8_t response[2] = {0xAA, 0xAA};
+    size_t response_len = 99;
+
+    int result = uds_dispatch_request(
+        disable, sizeof(disable), response, 1, &response_len);
+
+    passed = result == -1 && response_len == 0 &&
+             response[0] == 0xAA && response[1] == 0xAA &&
+             dtc_manager_is_setting_enabled();
+
+    printf("[%s] Insufficient response capacity preserves state\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    result = uds_dispatch_request(
+        suppressed_disable, sizeof(suppressed_disable),
+        response, sizeof(response), &response_len);
+
+    passed = result == 0 && response_len == 0 &&
+             !dtc_manager_is_setting_enabled();
+
+    printf("[%s] Suppressed response while disabling\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    result = uds_dispatch_request(
+        suppressed_enable, sizeof(suppressed_enable),
+        response, sizeof(response), &response_len);
+
+    passed = result == 0 && response_len == 0 &&
+             dtc_manager_is_setting_enabled();
+
+    printf("[%s] Suppressed response while enabling\n",
+           passed ? "PASS" : "FAIL");
+    failures += passed ? 0 : 1;
+
+    return failures;
+}
+
 int main(void)
 {
     int failures = 0;
@@ -576,6 +680,7 @@ int main(void)
     );
 
     failures += test_insufficient_capacity();
+    failures += test_control_dtc_setting();
     failures += test_communication_control();
     failures += test_ecu_reset();
     failures += test_session_timeout();
