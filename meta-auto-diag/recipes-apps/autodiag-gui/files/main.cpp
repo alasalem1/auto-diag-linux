@@ -1,7 +1,11 @@
 #include <QApplication>
 #include <QComboBox>
+#include <QFormLayout>
+#include <QScrollArea>
+#include <QTimer>
 #include <QFont>
 #include <QGroupBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -34,6 +38,12 @@ public:
     {
         setWindowTitle("AutoDiag Linux - UDS Diagnostics");
         resize(900, 650);
+
+        testerPresentTimer.setInterval(2000);
+        connect(&testerPresentTimer, &QTimer::timeout,
+                this, [this]() {
+            sendTesterPresent();
+        });
 
         auto *central = new QWidget(this);
         auto *mainLayout = new QVBoxLayout(central);
@@ -70,7 +80,36 @@ public:
         connectionLayout->addWidget(statusLabel);
         connectionLayout->addStretch();
 
+
         mainLayout->addWidget(connectionGroup);
+
+        auto *quickGroup = new QGroupBox("UDS Quick Actions");
+        auto *quickLayout = new QGridLayout(quickGroup);
+
+        auto addQuickAction = [this, quickLayout](
+            const QString &label, const QString &request,
+            int row, int column) {
+            auto *button = new QPushButton(label);
+            button->setEnabled(false);
+            quickLayout->addWidget(button, row, column);
+            quickActionButtons.push_back(button);
+
+            connect(button, &QPushButton::clicked,
+                    this, [this, request]() {
+                requestInput->setText(request);
+                sendRequest();
+            });
+        };
+
+        addQuickAction("Default Session", "10 01", 0, 0);
+        addQuickAction("Extended Session", "10 03", 0, 1);
+        addQuickAction("Request Security Seed", "27 01", 1, 0);
+        addQuickAction("Unlock (Demo Key)", "27 02 B7 F7 C8 09", 1, 1);
+        addQuickAction("Read VIN (F190)", "22 F1 90", 2, 0);
+        addQuickAction("Read Protected DID (F1A0)", "22 F1 A0", 2, 1);
+        addQuickAction("Read Calibration (F1A1)", "22 F1 A1", 3, 0);
+
+        mainLayout->addWidget(quickGroup);
 
         auto *requestGroup = new QGroupBox("UDS Diagnostic Request");
         auto *requestLayout = new QVBoxLayout(requestGroup);
@@ -139,6 +178,7 @@ public:
     }
 
 private:
+    QTimer testerPresentTimer;
     int socketFd = -1;
 
     QSocketNotifier *readNotifier = nullptr;
@@ -146,6 +186,7 @@ private:
     QComboBox *interfaceBox = nullptr;
     QPushButton *connectButton = nullptr;
     QPushButton *sendButton = nullptr;
+    std::vector<QPushButton *> quickActionButtons;
     QLabel *statusLabel = nullptr;
     QLineEdit *requestInput = nullptr;
     QTextEdit *responseView = nullptr;
@@ -154,6 +195,24 @@ private:
     void log(const QString &message)
     {
         logView->append(message);
+    }
+
+    void sendTesterPresent()
+    {
+        if (socketFd < 0)
+            return;
+
+        const uint8_t request[] = {0x3E, 0x80};
+
+        ssize_t sent = write(socketFd, request, sizeof(request));
+
+        if (sent != static_cast<ssize_t>(sizeof(request))) {
+            log("TesterPresent transmission failed: " +
+                QString::fromLocal8Bit(strerror(errno)));
+            return;
+        }
+
+        log("TX: 3E 80 (automatic TesterPresent)");
     }
 
     void connectCan()
@@ -219,14 +278,21 @@ private:
 
         connectButton->setText("Disconnect");
         sendButton->setEnabled(true);
+        for (auto *button : quickActionButtons)
+            button->setEnabled(true);
 
         log("Connected to " + QString::fromLocal8Bit(
             interfaceName) + " using ISO-TP.");
         log("Tester TX: 0x700 | ECU RX: 0x708");
+
+        testerPresentTimer.start();
+        log("Automatic TesterPresent enabled (every 2 seconds).");
     }
 
     void disconnectCan()
     {
+        testerPresentTimer.stop();
+
         if (readNotifier) {
             delete readNotifier;
             readNotifier = nullptr;
@@ -248,6 +314,9 @@ private:
 
         if (sendButton)
             sendButton->setEnabled(false);
+
+        for (auto *button : quickActionButtons)
+            button->setEnabled(false);
 
         if (logView)
             log("CAN connection closed.");
