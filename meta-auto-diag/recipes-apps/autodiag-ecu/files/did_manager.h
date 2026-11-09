@@ -4,8 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DID_WRITABLE_CALIBRATION       0xF1A1
-#define DID_WRITABLE_DATA_LENGTH      16
+#define DID_WRITABLE_CALIBRATION  0xF1A1
+#define DID_WRITABLE_DATA_LENGTH  16
+
+int did_manager_init(const char *storage_path);
 
 void did_manager_reset(void);
 

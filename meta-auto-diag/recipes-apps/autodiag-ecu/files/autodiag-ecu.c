@@ -18,6 +18,7 @@
 
 #include "uds_protocol.h"
 #include "uds_session.h"
+#include "did_manager.h"
 #include "can_communication.h"
 
 #define CAN_INTERFACE "vcan0"
@@ -65,6 +66,11 @@ static void execute_pending_reset(void)
 
 int main(void)
 {
+    if (did_manager_init("/var/lib/autodiag-ecu/calibration-f1a1.bin") != 0) {
+        perror("DID storage initialization");
+        return EXIT_FAILURE;
+    }
+
     int sock;
     int can_sock;
     struct sockaddr_can addr;

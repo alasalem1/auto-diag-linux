@@ -6,7 +6,8 @@ SOURCE_DIR="$ROOT_DIR/meta-auto-diag/recipes-apps/autodiag-ecu/files"
 TEST_DIR="$ROOT_DIR/tests/uds"
 
 BINARY="$(mktemp)"
-trap 'rm -f "$BINARY"' EXIT
+PERSISTENCE_BINARY="$(mktemp)"
+trap 'rm -f "$BINARY" "$PERSISTENCE_BINARY"' EXIT
 
 echo "===== COMPILING UDS UNIT TESTS ====="
 
@@ -33,3 +34,16 @@ gcc \
 
 echo "===== EXECUTING UDS UNIT TESTS ====="
 "$BINARY"
+
+echo
+echo "===== COMPILING DID PERSISTENCE TESTS ====="
+
+gcc \
+    -Wall -Wextra -Werror -std=c11 \
+    -I "$SOURCE_DIR" \
+    "$TEST_DIR/test_did_manager_persistence.c" \
+    "$SOURCE_DIR/did_manager.c" \
+    -o "$PERSISTENCE_BINARY"
+
+echo "===== EXECUTING DID PERSISTENCE TESTS ====="
+"$PERSISTENCE_BINARY"

@@ -10,6 +10,9 @@ Restart=on-failure
 RestartSec=2
 StandardOutput=journal
 StandardError=journal
+StateDirectory=autodiag-ecu
+StateDirectoryMode=0700
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

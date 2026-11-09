@@ -6,6 +6,7 @@
 #define UDS_NRC_INCORRECT_MESSAGE_LENGTH  0x13
 #define UDS_NRC_REQUEST_OUT_OF_RANGE      0x31
 #define UDS_NRC_SECURITY_ACCESS_DENIED    0x33
+#define UDS_NRC_GENERAL_PROGRAMMING_FAILURE 0x72
 #define UDS_NRC_SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION 0x7E
 
 int uds_service_2e(
@@ -72,8 +73,13 @@ int uds_service_2e(
     if (did_manager_write(
             did,
             &request[3],
-            DID_WRITABLE_DATA_LENGTH) != 0)
-        return -1;
+            DID_WRITABLE_DATA_LENGTH) != 0) {
+        response[0] = UDS_NEGATIVE_RESPONSE;
+        response[1] = 0x2E;
+        response[2] = UDS_NRC_GENERAL_PROGRAMMING_FAILURE;
+        *response_len = 3;
+        return 0;
+    }
 
     response[0] = 0x6E;
     response[1] = (uint8_t)(did >> 8);
