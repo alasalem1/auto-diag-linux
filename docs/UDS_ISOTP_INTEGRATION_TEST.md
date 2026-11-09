@@ -178,3 +178,45 @@ Decoded value: `NEW-CAL-DATA-001`.
 - Testing used QEMU and virtual CAN (`vcan0`), not physical CAN hardware.
 - The SecurityAccess algorithm is educational and is not production-grade.
 - Physical ECU and hardware CAN validation remain future work.
+
+## 8. Automated QEMU Boot and UDS Test
+
+The automated integration test is implemented in:
+
+`tests/qemu/run-qemu-integration.py`
+
+The Python runner uses `pexpect` to:
+1. Check that QEMU, the kernel, and the root filesystem exist.
+2. Create an independent temporary root filesystem copy.
+3. Start the Yocto-built QEMU image.
+4. Wait for the Linux login prompt and log in as root.
+5. Execute `/usr/bin/autodiag-isotp-test`.
+6. Verify that the output contains `TEST PASS`.
+7. Stop QEMU and clean up the temporary disk.
+
+### Automated test environment
+
+| Item | Value |
+|---|---|
+| Machine | qemux86-64 |
+| Emulator | Yocto-native QEMU |
+| Test runner | Python 3 + pexpect |
+| Diagnostic interface | vcan0 |
+| Diagnostic service | ReadDataByIdentifier (0x22) |
+| DID | 0xF190 (VIN) |
+
+### Verified result
+
+The automated test successfully booted the guest, logged in as root, and completed a UDS diagnostic exchange.
+
+Expected VIN:
+
+`AUTODIAG000000001`
+
+The ECU returned a positive response (`0x62`) for DID `0xF190`.
+
+**Result: PASS** — the automated QEMU integration test verified the VIN response and reported `UDS integration test passed.`
+
+Run from the KAS build environment:
+
+`python3 /work/tests/qemu/run-qemu-integration.py`
