@@ -147,10 +147,34 @@ The updated implementation was used during the successful live test.
 The QEMU integration test passed. The ECU accepted the 0x2E write request
 and returned the exact same 16-byte value through the 0x22 read request.
 
-## 6. Limitations and Future Work
+## 6. Persistent DID Verification
+
+DID F1A1 uses persistent file storage at:
+
+`/var/lib/autodiag-ecu/calibration-f1a1.bin`
+
+The following end-to-end test was completed in QEMU:
+
+1. Entered extended diagnostic session (`0x10 0x03`).
+2. Unlocked SecurityAccess (`0x27`) using the test key.
+3. Wrote the 16-byte value `NEW-CAL-DATA-001` using WriteDataByIdentifier (`0x2E`).
+4. Received positive response `6E F1 A1`.
+5. Compared the persistent file byte-for-byte against the expected 16-byte value.
+6. Rebooted the complete QEMU Linux guest.
+7. Confirmed the calibration file still contained the exact written value.
+8. Confirmed the ECU service loaded DID F1A1 from persistent storage at startup.
+9. Read DID F1A1 using ReadDataByIdentifier (`0x22`) after reboot.
+
+The final ISO-TP response was:
+
+`62 F1 A1 4E 45 57 2D 43 41 4C 2D 44 41 54 41 2D 30 30 31`
+
+Decoded value: `NEW-CAL-DATA-001`.
+
+**Result: PASS** — the UDS-written calibration value survived a complete Linux reboot and was returned correctly by the ECU.
+
+## 7. Limitations and Future Work
 
 - Testing used QEMU and virtual CAN (`vcan0`), not physical CAN hardware.
-- DID data is stored in RAM and is not persistent across application or
-  system restarts.
 - The SecurityAccess algorithm is educational and is not production-grade.
-- Physical ECU testing and persistence testing remain future work.
+- Physical ECU and hardware CAN validation remain future work.
