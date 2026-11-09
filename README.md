@@ -2,148 +2,191 @@
 
 **A Yocto-based embedded Linux platform for automotive diagnostics using SocketCAN, ISO-TP, and UDS.**
 
-AutoDiag Linux is an embedded Linux distribution built with the Yocto Project (Scarthgap) and KAS. It targets QEMU x86-64 and provides a foundation for developing and testing automotive diagnostic applications on Linux.
+AutoDiag Linux is a custom embedded Linux distribution built with the Yocto Project (Scarthgap) and KAS. It targets QEMU x86-64 and provides a platform for developing and testing automotive Electronic Control Unit (ECU) diagnostic software.
 
-The current implementation demonstrates end-to-end UDS communication between a simulated ECU and a diagnostic tester over Linux ISO-TP sockets and a virtual CAN interface.
+The project includes a modular C-based UDS ECU simulator, Linux SocketCAN and ISO-TP integration, diagnostic session and security management, DTC handling, and persistent storage for writable diagnostic data identifiers.
 
-## Project objectives
+> **Project scope:** This is a development and validation platform. ECU behavior and diagnostic communication have been tested in QEMU; physical vehicle and ECU hardware validation is not claimed.
 
-- Build a custom embedded Linux distribution using Yocto.
-- Integrate Linux SocketCAN and virtual CAN support.
-- Enable kernel ISO-TP communication.
-- Implement a simulated UDS ECU in C.
-- Implement a native Linux ISO-TP diagnostic tester in C.
-- Validate UDS ReadDataByIdentifier communication using DID `F190`.
+## Features
+
+- Custom Yocto Scarthgap distribution for `qemux86-64`.
+- Linux SocketCAN and virtual CAN (`vcan`) support.
+- Linux kernel ISO-TP transport.
+- Modular UDS ECU server written in C.
+- Diagnostic session management and ECU reset handling.
+- SecurityAccess implementation.
+- Diagnostic trouble code (DTC) management.
+- Read and write DataByIdentifier services.
+- Persistent storage for writable calibration data.
+- systemd-managed ECU and CAN setup services.
+- Automated UDS dispatcher and DID persistence tests.
+
 
 ## System architecture
 
-```mermaid
-flowchart TD
-    A["AutoDiag Linux - Yocto Scarthgap"]
-    A --> B["Linux Kernel"]
-    A --> C["Automotive Applications"]
-    B --> D["SocketCAN"]
-    B --> E["ISO-TP Kernel Module"]
-    B --> F["Virtual CAN - vcan"]
-    C --> G["Simulated UDS ECU"]
-    C --> H["UDS Diagnostic Tester"]
-    G --> E
-    H --> E
-    E --> F
-    F --> I["Virtual CAN Bus - vcan0"]
-```
+The platform consists of three main layers:
+
+- **Linux kernel:** SocketCAN, virtual CAN (vcan), and ISO-TP transport.
+- **UDS ECU server:** Receives diagnostic requests and dispatches them to modular service handlers.
+- **Diagnostic tester:** Communicates with the ECU over ISO-TP.
+
+The ECU application contains dedicated components for UDS dispatching, diagnostic sessions, security, DTC management, and DID storage.
 
 ## Technology stack
 
 | Component | Technology |
 |---|---|
 | Build system | Yocto Project |
-| Release | Scarthgap |
+| Yocto release | Scarthgap |
 | Build orchestration | KAS |
 | Target machine | QEMU x86-64 |
-| Kernel | Linux 6.6.160 |
+| Distribution | `autodiag` |
+| Image | `core-image-minimal` |
 | CAN interface | SocketCAN / vcan |
 | Transport protocol | Linux ISO-TP |
 | Diagnostic protocol | UDS |
 | Application language | C |
+| Init and service management | systemd |
 | Development environment | WSL2, Ubuntu, Docker |
 
-## Current implementation
 
-### Kernel integration
+## UDS implementation
 
-The custom kernel configuration enables:
+The ECU server uses a modular C architecture. Incoming diagnostic requests are received through Linux ISO-TP sockets and passed to a UDS dispatcher, which routes requests to their corresponding service handlers.
 
-- `CONFIG_CAN`
-- `CONFIG_CAN_RAW`
-- `CONFIG_CAN_VCAN`
-- `CONFIG_CAN_ISOTP`
+### Supported UDS services
 
-The `vcan` and `can-isotp` kernel modules are packaged in the image.
+| SID | Service | Function |
+|---|---|---|
+| `0x10` | DiagnosticSessionControl | Switch diagnostic sessions |
+| `0x11` | ECUReset | Handle ECU reset requests |
+| `0x14` | ClearDiagnosticInformation | Clear diagnostic trouble codes |
+| `0x19` | ReadDTCInformation | Read diagnostic trouble codes |
+| `0x22` | ReadDataByIdentifier | Read ECU data identifiers |
+| `0x27` | SecurityAccess | Handle diagnostic security access |
+| `0x28` | CommunicationControl | Control diagnostic communication |
+| `0x2E` | WriteDataByIdentifier | Write supported ECU data identifiers |
+| `0x3E` | TesterPresent | Keep diagnostic sessions alive |
+| `0x85` | ControlDTCSetting | Control DTC setting |
 
-### UDS ECU simulator
+### Data identifiers
 
-The `autodiag-ecu` application simulates an ECU. It listens for diagnostic requests using an ISO-TP socket.
+- **DID `F190` — VIN:** A simulated vehicle identification number exposed through ReadDataByIdentifier (`0x22`).
+- **DID `F1A1` — Calibration data:** A writable 16-byte calibration value handled through ReadDataByIdentifier (`0x22`) and WriteDataByIdentifier (`0x2E`).
 
-Current supported service:
 
-- `0x22` — ReadDataByIdentifier
-- DID `F190` — simulated VIN
+### Persistent calibration storage
 
-### Diagnostic tester
+The writable calibration DID `F1A1` is stored at:
 
-The `autodiag-isotp-test` application sends a UDS request, receives the ECU response, validates the positive response SID and DID, and checks the returned VIN.
+`/var/lib/autodiag-ecu/calibration-f1a1.bin`
+
+The persistence implementation includes:
+
+- Loading calibration data during ECU initialization.
+- Creating a default value when the storage file is missing.
+- Validation of the expected 16-byte data length.
+- Rejection of truncated or oversized storage files.
+- Atomic file replacement using a temporary file and rename.
+- File and parent-directory synchronization.
+- Preservation of in-memory calibration data when persistent storage fails.
+
+The ECU systemd service uses a dedicated state directory with restrictive permissions.
+
+If a UDS write cannot be persisted, the ECU returns negative response code `0x72` (General Programming Failure). The in-memory calibration value remains unchanged.
+
+
+## Automated tests
+
+Run the host-side UDS and persistence test suite from the repository root using:
+
+    ./tests/run-uds-tests.sh
+
+The test runner compiles the C tests with GCC using -Wall -Wextra -Werror -std=c11.
+
+The suite covers:
+
+- UDS request dispatching and service responses.
+- Valid and invalid diagnostic requests.
+- Supported and unsupported data identifiers.
+- Calibration persistence and reload after initialization.
+- Invalid calibration data lengths.
+- Truncated and oversized storage files.
+- Persistent write failures.
+- Preservation of in-memory data after failed writes.
+- UDS negative response 0x72 when persistent storage fails.
+
+The persistence-failure regression test verifies that a failed UDS write does not modify the in-memory calibration value or destroy the previously stored calibration.
+
 
 ## Build instructions
 
-Clone the repository and enter the project directory.
+### Prerequisites
 
-Build the image using the Docker/KAS wrapper:
+- Linux environment or WSL2 with Ubuntu.
+- Docker installed and running.
+- Git.
 
-```bash
-./docker/docker.sh build kas/auto-diag-linux.yml
-```
+### Clone the repository
 
-The build targets `qemux86-64` and produces the `core-image-minimal` image.
+    git clone https://github.com/alasalem1/auto-diag-linux.git
+    cd auto-diag-linux
 
-## Runtime test
+### Build the image
 
-Inside the booted QEMU guest, configure the virtual CAN interface:
+    ./docker/docker.sh build kas/auto-diag-linux.yml
 
-```bash
-modprobe vcan
-modprobe can-isotp
+The KAS configuration selects:
 
-ip link add dev vcan0 type vcan
-ip link set vcan0 up
-```
+- Machine: `qemux86-64`
+- Distribution: `autodiag`
+- Image: `core-image-minimal`
+- Yocto release: Scarthgap
 
-Start the simulated ECU:
+The build produces a bootable QEMU image and associated deployment artifacts.
 
-```bash
-autodiag-ecu > /tmp/autodiag-ecu.log 2>&1 &
-sleep 1
-```
 
-Run the diagnostic tester:
+## Repository structure
 
-```bash
-autodiag-isotp-test
-```
+    auto-diag-linux/
+    ├── docker/                 # Docker build and shell helpers
+    ├── docs/                   # Project and integration documentation
+    ├── kas/                    # KAS build configurations
+    ├── meta-auto-diag/         # Custom Yocto layer
+    │   └── recipes-apps/
+    │       ├── autodiag-ecu/   # UDS ECU server
+    │       ├── autodiag-gui/   # Diagnostic GUI application
+    │       └── autodiag-isotp/ # ISO-TP diagnostic test tools
+    ├── scripts/                # Development scripts
+    ├── tests/                  # Automated tests
+    │   └── uds/                # UDS and DID persistence tests
+    └── README.md
 
-Expected result:
-
-```text
-AutoDiag UDS Tester
-
-Service     : ReadDataByIdentifier (0x22)
-DID         : F190 (VIN)
-
-Simulated VIN: AUTODIAG000000001
-
-TEST PASS
-```
 
 ## Project status
 
-**Implemented and tested**
-- Yocto Scarthgap distribution for QEMU x86-64.
-- SocketCAN and virtual CAN kernel support.
-- Linux ISO-TP kernel support.
-- CAN frame transmission and reception using `can-utils`.
-- C-based simulated UDS ECU.
-- C-based ISO-TP diagnostic tester.
-- End-to-end UDS `0x22 / F190` communication.
+### Implemented
 
-**Planned**
-- Additional UDS diagnostic services.
-- Diagnostic trouble code handling.
-- ECU session management and security access.
-- Automated integration tests.
-- Diagnostic logging and reporting.
-- Qt-based diagnostic interface.
-- Performance and image-size optimization.
+- Yocto Scarthgap distribution built with KAS.
+- QEMU x86-64 target configuration.
+- SocketCAN virtual CAN interface and ISO-TP integration.
+- Modular C-based UDS ECU simulator.
+- Ten implemented UDS services.
+- Diagnostic sessions and SecurityAccess.
+- DTC management.
+- VIN reading and writable calibration DID.
+- Persistent calibration storage with failure handling.
+- Automated UDS dispatcher and persistence tests.
+- QEMU validation of diagnostic communication and persistence across service restart and guest reboot.
 
-## Project scope
+### Future improvements
 
-This is an actively developed engineering project and a QEMU-based proof of concept. The current simulated ECU and VIN are for development and testing; they do not represent a real vehicle ECU or production diagnostic system.
+- Complete and validate the diagnostic GUI.
+- Integrate additional external diagnostic tester tools.
+- Validate communication with physical CAN hardware and a real ECU.
+- Extend security hardening and performance testing.
+
+## Limitations
+
+AutoDiag Linux is a development and validation platform. The ECU simulator uses simulated diagnostic data and has been validated in QEMU. Physical vehicle testing, production qualification, and automotive certification are outside the current project scope.
