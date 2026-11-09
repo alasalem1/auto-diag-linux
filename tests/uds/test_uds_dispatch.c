@@ -10,6 +10,7 @@
 #include "uds_session.h"
 #include "uds_security.h"
 #include "dtc_manager.h"
+#include "did_manager.h"
 
 static int run_test(
     const char *name,
@@ -570,6 +571,120 @@ static int test_control_dtc_setting(void)
     return failures;
 }
 
+
+static int test_write_data_by_identifier(void)
+{
+    int failures = 0;
+
+    const uint8_t write_request[] = {
+        0x2E, 0xF1, 0xA1,
+        'N', 'E', 'W', '-', 'C', 'A', 'L', '-',
+        'D', 'A', 'T', 'A', '-', '0', '0', '1'
+    };
+
+    const uint8_t read_request[] = {0x22, 0xF1, 0xA1};
+
+    const uint8_t denied_default[] = {0x7F, 0x2E, 0x7E};
+    const uint8_t denied_locked[] = {0x7F, 0x2E, 0x33};
+    const uint8_t write_response[] = {0x6E, 0xF1, 0xA1};
+
+    const uint8_t read_response[] = {
+        0x62, 0xF1, 0xA1,
+        'N', 'E', 'W', '-', 'C', 'A', 'L', '-',
+        'D', 'A', 'T', 'A', '-', '0', '0', '1'
+    };
+
+    const uint8_t invalid_length[18] = {
+        0x2E, 0xF1, 0xA1,
+        'N', 'E', 'W', '-', 'C', 'A', 'L', '-',
+        'D', 'A', 'T', 'A', '-', '0', '0'
+    };
+
+    const uint8_t invalid_length_response[] = {
+        0x7F, 0x2E, 0x13
+    };
+
+    const uint8_t unsupported_did[19] = {
+        0x2E, 0xF1, 0xA2,
+        'N', 'E', 'W', '-', 'C', 'A', 'L', '-',
+        'D', 'A', 'T', 'A', '-', '0', '0', '1'
+    };
+
+    const uint8_t unsupported_did_response[] = {
+        0x7F, 0x2E, 0x31
+    };
+
+    printf("\n===== WRITE DATA BY IDENTIFIER TESTS =====\n");
+
+    did_manager_reset();
+    uds_session_reset();
+    uds_security_reset();
+
+    failures += run_test(
+        "Write DID denied in Default Session",
+        write_request, sizeof(write_request),
+        denied_default, sizeof(denied_default)
+    );
+
+    if (uds_session_set(UDS_SESSION_EXTENDED) != 0) {
+        printf("[FAIL] Enter Extended Session for WriteDataByIdentifier\n");
+        return failures + 1;
+    }
+
+    failures += run_test(
+        "Write DID denied while SecurityAccess is locked",
+        write_request, sizeof(write_request),
+        denied_locked, sizeof(denied_locked)
+    );
+
+    uint32_t seed = uds_security_generate_seed();
+    uint32_t key = uds_security_calculate_key(seed);
+
+    if (uds_security_validate_key(key) != 0) {
+        printf("[FAIL] Unlock SecurityAccess for WriteDataByIdentifier\n");
+        return failures + 1;
+    }
+
+    failures += run_test(
+        "Write writable calibration DID",
+        write_request, sizeof(write_request),
+        write_response, sizeof(write_response)
+    );
+
+    failures += run_test(
+        "Read back updated calibration DID",
+        read_request, sizeof(read_request),
+        read_response, sizeof(read_response)
+    );
+
+    failures += run_test(
+        "Reject incorrect WriteDataByIdentifier length",
+        invalid_length, sizeof(invalid_length),
+        invalid_length_response, sizeof(invalid_length_response)
+    );
+
+    failures += run_test(
+        "Reject unsupported writable DID",
+        unsupported_did, sizeof(unsupported_did),
+        unsupported_did_response, sizeof(unsupported_did_response)
+    );
+
+    if (uds_session_set(UDS_SESSION_DEFAULT) != 0) {
+        printf("[FAIL] Return to Default Session after write tests\n");
+        return failures + 1;
+    }
+
+    uds_security_reset();
+
+    failures += run_test(
+        "Write DID denied again in Default Session",
+        write_request, sizeof(write_request),
+        denied_default, sizeof(denied_default)
+    );
+
+    return failures;
+}
+
 int main(void)
 {
     int failures = 0;
@@ -681,6 +796,8 @@ int main(void)
 
     failures += test_insufficient_capacity();
     failures += test_control_dtc_setting();
+    failures += test_write_data_by_identifier();
+
     failures += test_communication_control();
     failures += test_ecu_reset();
     failures += test_session_timeout();

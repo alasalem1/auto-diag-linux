@@ -1,6 +1,8 @@
+#include <string.h>
 #include "uds_protocol.h"
 #include "uds_session.h"
 #include "uds_security.h"
+#include "did_manager.h"
 
 #define UDS_NRC_INCORRECT_MESSAGE_LENGTH  0x13
 #define UDS_NRC_REQUEST_OUT_OF_RANGE      0x31
@@ -92,6 +94,39 @@ int uds_service_22(
 
         for (size_t i = 0; i < data_len; i++)
             response[i + 3] = protected_calibration[i];
+
+        *response_len = data_len + 3;
+        return 0;
+    }
+
+    /* Writable calibration DID: Extended Session + SecurityAccess. */
+    if (did == DID_WRITABLE_CALIBRATION) {
+        if (uds_session_get() != UDS_SESSION_EXTENDED) {
+            return send_negative_response(
+                UDS_NRC_SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION,
+                response, response_capacity, response_len);
+        }
+
+        if (!uds_security_is_unlocked()) {
+            return send_negative_response(
+                UDS_NRC_SECURITY_ACCESS_DENIED,
+                response, response_capacity, response_len);
+        }
+
+        uint8_t data[DID_WRITABLE_DATA_LENGTH];
+        size_t data_len = 0;
+
+        if (did_manager_read(
+                did, data, sizeof(data), &data_len) != 0)
+            return -1;
+
+        if (response_capacity < data_len + 3)
+            return -1;
+
+        response[0] = 0x62;
+        response[1] = (uint8_t)(did >> 8);
+        response[2] = (uint8_t)did;
+        memcpy(response + 3, data, data_len);
 
         *response_len = data_len + 3;
         return 0;

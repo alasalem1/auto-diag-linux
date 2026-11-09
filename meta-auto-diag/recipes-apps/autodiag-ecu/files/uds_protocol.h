@@ -7,6 +7,7 @@
 #define UDS_SID_ECU_RESET                  0x11
 #define UDS_SID_DIAGNOSTIC_SESSION_CONTROL 0x10
 #define UDS_SID_READ_DATA_BY_IDENTIFIER    0x22
+#define UDS_SID_WRITE_DATA_BY_IDENTIFIER   0x2E
 #define UDS_SID_SECURITY_ACCESS            0x27
 #define UDS_SID_READ_DTC_INFORMATION       0x19
 #define UDS_SID_CLEAR_DIAGNOSTIC_INFORMATION 0x14
@@ -101,5 +102,14 @@ int uds_service_85(
 
 uint8_t uds_communication_control_get(void);
 void uds_communication_control_reset(void);
+
+
+int uds_service_2e(
+    const uint8_t *request,
+    size_t request_len,
+    uint8_t *response,
+    size_t response_capacity,
+    size_t *response_len
+);
 
 #endif

@@ -20,6 +20,9 @@ SRC_URI = " \
     file://dtc_manager.h \
     file://dtc_manager.c \
     file://service_22.c \
+    file://did_manager.h \
+    file://did_manager.c \
+    file://service_2e.c \
     file://service_27.c \
     file://service_3e.c \
     file://service_28.c \
@@ -49,6 +52,8 @@ do_compile() {
         ${S}/service_19.c \
         ${S}/dtc_manager.c \
         ${S}/service_22.c \
+        ${S}/did_manager.c \
+        ${S}/service_2e.c \
         ${S}/service_27.c \
         ${S}/service_3e.c \
         ${S}/service_28.c \
@@ -66,6 +71,8 @@ do_compile() {
         ${S}/service_19.c \
         ${S}/dtc_manager.c \
         ${S}/service_22.c \
+        ${S}/did_manager.c \
+        ${S}/service_2e.c \
         ${S}/service_27.c \
         ${S}/service_3e.c \
         ${S}/service_28.c \

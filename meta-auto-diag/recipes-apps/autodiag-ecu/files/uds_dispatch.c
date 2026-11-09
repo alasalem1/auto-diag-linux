@@ -53,6 +53,11 @@ int uds_dispatch_request(
                               response, response_capacity,
                               response_len);
 
+    case UDS_SID_WRITE_DATA_BY_IDENTIFIER:
+        return uds_service_2e(request, request_len,
+                              response, response_capacity,
+                              response_len);
+
     case UDS_SID_SECURITY_ACCESS:
         return uds_service_27(request, request_len,
                               response, response_capacity,

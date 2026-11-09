@@ -21,6 +21,8 @@ gcc \
     "$SOURCE_DIR/service_19.c" \
     "$SOURCE_DIR/dtc_manager.c" \
     "$SOURCE_DIR/service_22.c" \
+    "$SOURCE_DIR/did_manager.c" \
+    "$SOURCE_DIR/service_2e.c" \
     "$SOURCE_DIR/service_27.c" \
     "$SOURCE_DIR/service_3e.c" \
     "$SOURCE_DIR/service_28.c" \
